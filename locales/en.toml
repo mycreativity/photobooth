@@ -1,0 +1,139 @@
+# ============================================================
+# Photobooth — English translations
+# ============================================================
+# This file contains all user-facing text.
+# Structure: [screen.element] = "text"
+# Use {placeholder} for dynamic values.
+# IMPORTANT: No emoji — Kivy's SDL2 renderer cannot display them.
+
+[app]
+name = "Photobooth"
+
+[idle]
+title = "Photobooth"
+subtitle = "Tap the screen to start"
+tap_to_start = "START"
+
+[countdown]
+label = "{seconds}"
+get_ready = "Look at the lens!"
+look_at_lens = "LOOK HERE"
+photo_counter = "Photo {current} of {total}"
+
+[layout]
+title = "Choose a layout"
+single = "Single Shot"
+strip = "Collage (3)"
+grid = "Photo Grid (4)"
+
+[filter]
+title = "Choose your vibe"
+classic = "Classic"
+vintage_love = "Vintage Love"
+glamour_bw = "Glamour B&W"
+golden_hour = "Golden Hour"
+party_pop = "Party Pop"
+
+[capture]
+flash = "Cheese!"
+processing = "Processing..."
+
+[review]
+title = "Review your photos"
+retake = "Retake"
+retake_hint = "Tap a photo to retake it"
+retake_counter = "Retaking: Photo {n}"
+accept = "Done!"
+auto_retouch = "Retouch"
+brightness = "Brightness+"
+retouch_applied = "Retouch applied"
+brightness_applied = "Brightness boosted"
+glamour = "Glamour"
+glamour_applied = "Glamour applied"
+photo_number = "Photo {n}"
+
+[deliver]
+title = "Your photos are ready!"
+scan_hint = "Scan the QR code with your phone"
+send_to_me = "Send to Me"
+print_btn = "Print"
+done = "Done!"
+email_placeholder = "Email address"
+sending_email = "Sending..."
+email_sent = "Sent!"
+email_failed = "Failed to send"
+
+[loading]
+processing = "Processing..."
+please_wait = "Just a moment"
+retouch = "Retouching photos..."
+saving = "Saving photos..."
+composing = "Creating print layout..."
+
+[print]
+sending = "Printing..."
+done = "Done! Don't forget your photo."
+error = "Something went wrong while printing."
+
+[common]
+back = "Back"
+close = "Close"
+language = "Language"
+theme = "Theme"
+
+[event]
+required_title = "No event active"
+required_message = "Create an event in settings first"
+go_to_settings = "Go to settings"
+current = "Current event"
+create_new = "New event"
+create_placeholder = "Name for new event"
+create_button = "Create"
+reset = "Reset event"
+reset_confirm = "Are you sure? The current event will be deactivated."
+reset_yes = "Yes, reset"
+reset_cancel = "Cancel"
+name_exists = "This name already exists"
+name_empty = "Enter a name"
+created = "Event '{name}' created!"
+event_stats = "Sessions: {sessions} | Photos: {photos}"
+no_event = "No event"
+unsaved = "⚠ Not saved yet"
+
+[settings]
+title = "Settings"
+camera = "Camera: {name}"
+event_name = "Event"
+event_placeholder = "e.g. Wedding Jan & Lisa"
+language_label = "Language"
+theme_label = "Theme"
+first_countdown = "First photo countdown"
+between_shots = "Gap between shots"
+seconds = "{n}s"
+stats = "Sessions: {sessions} | Photos: {photos}"
+save = "Save"
+saved = "Settings saved!"
+restart_hint = "Language/theme changes take effect after restart"
+restarting = "Restarting..."
+back = "Back"
+tab_general = "General"
+tab_effects = "Effects"
+glamour_skin = "Skin Smoothing"
+glamour_warmth = "Color Warmth"
+glamour_vignette = "Vignette"
+glamour_eyes = "Eye Enhancement"
+glamour_makeup = "Makeup"
+glamour_sparkles = "Sparkles"
+glamour_glow = "Soft Glow"
+tab_camera = "Camera"
+camera_backend = "Camera"
+camera_iso = "ISO"
+camera_aperture = "Aperture"
+camera_shutter = "Shutter Speed"
+camera_preview_fps = "Preview FPS"
+camera_auto_exposure = "⚡ Auto Exposure"
+camera_calibrating = "Calibrating..."
+camera_calibrated = "Exposure: ISO {iso}, f/{aperture}, {shutter} ✓"
+camera_calibrate_failed = "Calibration not optimal — adjust manually"
+camera_restart_needed = "Restart needed for camera switch"
+camera_not_found = "No DSLR found"

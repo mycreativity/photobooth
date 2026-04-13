@@ -1,0 +1,139 @@
+# ============================================================
+# Photobooth — Nederlandse vertalingen (standaard)
+# ============================================================
+# Dit bestand bevat alle gebruikersgerichte tekst.
+# Structuur: [scherm.element] = "tekst"
+# Gebruik {placeholder} voor dynamische waarden.
+# BELANGRIJK: Geen emoji gebruiken — Kivy's SDL2 renderer kan ze niet tonen.
+
+[app]
+name = "Photobooth"
+
+[idle]
+title = "Photobooth"
+subtitle = "Tik op het scherm om te beginnen"
+tap_to_start = "START"
+
+[countdown]
+label = "{seconds}"
+get_ready = "Kijk in de lens!"
+look_at_lens = "KIJK HIER"
+photo_counter = "Foto {current} van {total}"
+
+[layout]
+title = "Kies een layout"
+single = "Enkele foto"
+strip = "Collage (3)"
+grid = "Fotogrid (4)"
+
+[filter]
+title = "Kies een stijl"
+classic = "Klassiek"
+vintage_love = "Vintage Love"
+glamour_bw = "Glamour Z&W"
+golden_hour = "Golden Hour"
+party_pop = "Party Pop"
+
+[capture]
+flash = "Cheese!"
+processing = "Even geduld..."
+
+[review]
+title = "Bekijk je foto's"
+retake = "Opnieuw"
+retake_hint = "Tik op een foto om opnieuw te maken"
+retake_counter = "Opnieuw: Foto {n}"
+accept = "Klaar!"
+auto_retouch = "Retouch"
+brightness = "Helderheid+"
+retouch_applied = "Retouch toegepast"
+brightness_applied = "Helderheid verhoogd"
+glamour = "Glamour"
+glamour_applied = "Glamour toegepast"
+photo_number = "Foto {n}"
+
+[deliver]
+title = "Je foto's zijn klaar!"
+scan_hint = "Scan de QR-code met je telefoon"
+send_to_me = "Stuur naar mij"
+print_btn = "Printen"
+done = "Klaar!"
+email_placeholder = "E-mailadres"
+sending_email = "Versturen..."
+email_sent = "Verstuurd!"
+email_failed = "Verzenden mislukt"
+
+[loading]
+processing = "Bezig met verwerken..."
+please_wait = "Even geduld alsjeblieft"
+retouch = "Foto's worden bewerkt..."
+saving = "Foto's opslaan..."
+composing = "Print layout maken..."
+
+[print]
+sending = "Printen..."
+done = "Klaar! Vergeet je foto niet."
+error = "Er ging iets mis bij het printen."
+
+[common]
+back = "Terug"
+close = "Sluiten"
+language = "Taal"
+theme = "Thema"
+
+[event]
+required_title = "Geen evenement actief"
+required_message = "Maak eerst een evenement aan in de instellingen"
+go_to_settings = "Naar instellingen"
+current = "Huidig evenement"
+create_new = "Nieuw evenement"
+create_placeholder = "Naam voor nieuw evenement"
+create_button = "Aanmaken"
+reset = "Event resetten"
+reset_confirm = "Weet je het zeker? Het huidige event wordt afgesloten."
+reset_yes = "Ja, resetten"
+reset_cancel = "Annuleren"
+name_exists = "Deze naam bestaat al"
+name_empty = "Voer een naam in"
+created = "Evenement '{name}' aangemaakt!"
+event_stats = "Sessies: {sessions} | Foto's: {photos}"
+no_event = "Geen event"
+unsaved = "⚠ Nog niet opgeslagen"
+
+[settings]
+title = "Instellingen"
+camera = "Camera: {name}"
+event_name = "Evenement"
+event_placeholder = "Bijv. Bruiloft Jan & Lisa"
+language_label = "Taal"
+theme_label = "Thema"
+first_countdown = "Aftelling eerste foto"
+between_shots = "Pauze tussen foto's"
+seconds = "{n}s"
+stats = "Sessies: {sessions} | Foto's: {photos}"
+save = "Opslaan"
+saved = "Instellingen opgeslagen!"
+restart_hint = "Taal/thema-wijzigingen worden actief na herstart"
+restarting = "Herstarten..."
+back = "Terug"
+tab_general = "Algemeen"
+tab_effects = "Effecten"
+glamour_skin = "Huidverzachting"
+glamour_warmth = "Kleurwarmte"
+glamour_vignette = "Vignette"
+glamour_eyes = "Oog-verbetering"
+glamour_makeup = "Make-up"
+glamour_sparkles = "Sparkles"
+glamour_glow = "Soft Glow"
+tab_camera = "Camera"
+camera_backend = "Camera"
+camera_iso = "ISO"
+camera_aperture = "Diafragma"
+camera_shutter = "Sluitertijd"
+camera_preview_fps = "Preview FPS"
+camera_auto_exposure = "⚡ Auto Belichting"
+camera_calibrating = "Bezig met kalibreren..."
+camera_calibrated = "Belichting: ISO {iso}, f/{aperture}, {shutter} ✓"
+camera_calibrate_failed = "Kalibratie niet optimaal — handmatig aanpassen"
+camera_restart_needed = "Herstart nodig voor camera-wissel"
+camera_not_found = "Geen DSLR gevonden"

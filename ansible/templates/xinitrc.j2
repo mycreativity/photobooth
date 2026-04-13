@@ -1,0 +1,24 @@
+#!/bin/sh
+# Photobooth kiosk X session — managed by Ansible
+xset s off          # No screensaver
+xset -dpms          # No power management
+xset s noblank      # No screen blanking
+# Show logo scaled to fit on black background while app loads
+feh --bg-max --image-bg black {{ app_dir }}/assets/images/logo.png 2>/dev/null || xsetroot -solid black
+unclutter -idle 0.1 -root &   # Hide cursor immediately
+
+# Preview optimisation
+export PREVIEW_MAX_WIDTH=640
+
+# Force window to top-left corner
+export KIVY_WINDOW=sdl2
+export SDL_VIDEO_WINDOW_POS=0,0
+
+# CRITICAL: cd to app dir so booth.toml is found
+cd {{ app_dir }}
+
+# Allow root to use the X display (for GPIO/LED access via sudo)
+xhost +local:
+
+# sudo -E preserves ALL env vars (DISPLAY, HOME, SDL, KIVY, etc.)
+exec sudo -E {{ venv_dir }}/bin/python -m photobooth

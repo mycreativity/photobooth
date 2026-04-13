@@ -1,0 +1,22 @@
+[Unit]
+Description=Photobooth Kiosk
+After=multi-user.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ booth_user }}
+Group={{ booth_group }}
+WorkingDirectory={{ app_dir }}
+Environment=DISPLAY=:0
+Environment=KIVY_WINDOW=sdl2
+Environment=KIVY_GL_BACKEND=gl
+Environment=PREVIEW_MAX_WIDTH=960
+ExecStart={{ venv_dir }}/bin/python -m photobooth
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

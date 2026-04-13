@@ -1,0 +1,43 @@
+# Photobooth Plymouth Script
+# Shows logo centered on a dark background
+
+bg_image = Image("bg.png");
+logo_image = Image("logo.png");
+
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+# Draw dark background (scaled to fill screen)
+bg_sprite = Sprite(bg_image.Scale(screen_width, screen_height));
+bg_sprite.SetX(0);
+bg_sprite.SetY(0);
+bg_sprite.SetZ(-100);
+
+# Center the logo (scale to 40% of screen width, maintain aspect ratio)
+logo_width = screen_width * 0.4;
+logo_ratio = logo_image.GetHeight() / logo_image.GetWidth();
+logo_height = logo_width * logo_ratio;
+
+scaled_logo = logo_image.Scale(logo_width, logo_height);
+logo_sprite = Sprite(scaled_logo);
+logo_sprite.SetX(screen_width / 2 - logo_width / 2);
+logo_sprite.SetY(screen_height / 2 - logo_height / 2);
+logo_sprite.SetZ(10);
+
+# Hide all text messages (password prompts, fsck, etc.)
+fun message_callback(text, isStatusUpdate) {
+    # Silently ignore all messages
+}
+
+Plymouth.SetMessageFunction(message_callback);
+
+fun display_normal_callback() {
+    # Nothing to do
+}
+
+fun display_password_callback(prompt, bullets) {
+    # Nothing to do — kiosk mode, no password
+}
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
