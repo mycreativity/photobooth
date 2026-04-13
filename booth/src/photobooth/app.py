@@ -49,6 +49,7 @@ class PhotoboothApp(App):
         self._camera = None
         self._storage = None
         self._led = None
+        self._agent = None
         super().__init__(**kwargs)
 
     @property
@@ -133,6 +134,23 @@ class PhotoboothApp(App):
         # Bind Ctrl+Q for clean quit
         Window.bind(on_keyboard=self._on_keyboard_down)
 
+        # Start admin server agent (if configured)
+        server_cfg = getattr(cfg, "server", None)
+        if server_cfg and getattr(server_cfg, "enabled", False):
+            try:
+                from photobooth.services.agent import BoothAgent
+                self._agent = BoothAgent({
+                    "url": server_cfg.url,
+                    "booth_id": server_cfg.booth_id,
+                    "booth_name": server_cfg.booth_name,
+                    "heartbeat_interval": getattr(server_cfg, "heartbeat_interval", 10),
+                    "reconnect_delay": getattr(server_cfg, "reconnect_delay", 5),
+                    "reconnect_max_delay": getattr(server_cfg, "reconnect_max_delay", 60),
+                })
+                self._agent.start()
+            except Exception as e:
+                logger.warning("Failed to start booth agent: %s", e)
+
         return build_screen_manager(
             t=t,
             theme=theme,
@@ -189,6 +207,10 @@ class PhotoboothApp(App):
 
     def on_stop(self) -> None:
         """Clean up resources when the app exits."""
+        if self._agent:
+            self._agent.stop()
+            logger.info("Booth agent stopped")
+
         if self._led:
             self._led.shutdown()
             logger.info("LED service shut down")

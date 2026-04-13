@@ -137,6 +137,20 @@ class EmailConfig:
 
 
 @dataclass(frozen=True)
+class ServerConfig:
+    """Admin server connection settings."""
+
+    enabled: bool = False
+    url: str = "ws://localhost:8000"
+    booth_id: str = "booth-001"
+    booth_name: str = "Photobooth 1"
+    api_key: str = ""
+    heartbeat_interval: int = 10
+    reconnect_delay: int = 5
+    reconnect_max_delay: int = 60
+
+
+@dataclass(frozen=True)
 class BoothConfig:
     """Root configuration object aggregating all sub-configs."""
 
@@ -150,6 +164,7 @@ class BoothConfig:
     led: LedConfig = field(default_factory=LedConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
+    server: ServerConfig = field(default_factory=ServerConfig)
 
     @classmethod
     def from_dict(cls, data: dict) -> Self:
@@ -165,6 +180,7 @@ class BoothConfig:
             led=LedConfig(**data.get("led", {})),
             storage=StorageConfig(**data.get("storage", {})),
             email=EmailConfig(**data.get("email", {})),
+            server=ServerConfig(**data.get("server", {})),
         )
 
 

@@ -1,0 +1,16 @@
+# Local development overrides
+# Usage: docker compose up (automatically picks up this file)
+#
+# This disables Traefik labels and the external proxy network
+# so you can run everything locally with docker compose up.
+
+networks:
+  proxy:
+    external: false  # Override: create locally instead of expecting external
+
+services:
+  server:
+    labels: []  # Override: no Traefik labels locally
+
+  admin:
+    labels: []  # Override: no Traefik labels locally

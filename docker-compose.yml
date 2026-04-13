@@ -1,8 +1,8 @@
-version: "3.9"
-
 networks:
   photobooth:
     driver: bridge
+  proxy:
+    external: true  # Traefik network (production)
 
 volumes:
   server-data:  # SQLite DB + uploaded photos
@@ -17,8 +17,9 @@ services:
       - ./shared:/app/shared                 # Dev: shared protocol
     networks:
       - photobooth
+      - proxy                                # Traefik network
     ports:
-      - "8000:8000"                          # External: booth WS + API
+      - "8000:8000"                          # Local dev access
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/photobooth.db
       - PHOTOS_DIR=/data/photos
@@ -31,6 +32,14 @@ services:
       - SERVER_URL=${SERVER_URL:-http://localhost:8000}
       - ADMIN_URL=${ADMIN_URL:-http://localhost:3000}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-steenweg@gmail.com}
+    labels:
+      # Traefik — API + WebSocket
+      - "traefik.enable=true"
+      - "traefik.http.routers.pb-api.rule=Host(`api.mycreativity.nl`)"
+      - "traefik.http.routers.pb-api.entrypoints=websecure"
+      - "traefik.http.routers.pb-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pb-api.loadbalancer.server.port=8000"
+      - "traefik.docker.network=proxy"
     restart: unless-stopped
 
   admin:
@@ -41,11 +50,20 @@ services:
       - ./admin/public:/app/public
     networks:
       - photobooth
+      - proxy                                # Traefik network
     ports:
-      - "3000:3000"
+      - "3000:3000"                          # Local dev access
     environment:
       - API_URL=http://server:8000           # Internal Docker network (S2S)
       - NEXT_PUBLIC_WS_URL=${WS_URL:-ws://localhost:8000}
+    labels:
+      # Traefik — Admin dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.pb-admin.rule=Host(`admin.mycreativity.nl`)"
+      - "traefik.http.routers.pb-admin.entrypoints=websecure"
+      - "traefik.http.routers.pb-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pb-admin.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
     depends_on:
       - server
     restart: unless-stopped
@@ -53,14 +71,20 @@ services:
   # public:
   #   build: ./public
   #   container_name: pb-public
-  #   volumes:
-  #     - ./public/src:/app/src
   #   networks:
   #     - photobooth
+  #     - proxy
   #   ports:
   #     - "3001:3000"
   #   environment:
   #     - API_URL=http://server:8000
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.pb-public.rule=Host(`booth.mycreativity.nl`)"
+  #     - "traefik.http.routers.pb-public.entrypoints=websecure"
+  #     - "traefik.http.routers.pb-public.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.pb-public.loadbalancer.server.port=3000"
+  #     - "traefik.docker.network=proxy"
   #   depends_on:
   #     - server
   #   restart: unless-stopped

@@ -55,7 +55,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Photobooth Admin API",
     version="0.1.0",
+    description="REST API + WebSocket hub voor photobooth beheer",
     lifespan=lifespan,
+    docs_url=None,         # Disable Swagger UI
+    redoc_url="/docs",     # ReDoc at /docs
 )
 
 # CORS — allow admin and public frontends

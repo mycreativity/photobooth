@@ -54,3 +54,13 @@ led_count = 80                  # Number of LEDs in the strip
 gpio_pin = 18                   # GPIO pin (18 = PWM0)
 brightness = 80                 # 0-255 default brightness
 flash_brightness = 255          # Max brightness for photo flash
+
+[server]
+enabled = false                         # Enable admin server connection
+url = "ws://192.168.0.128:8000"         # Server WS URL (LAN IP for dev)
+booth_id = "booth-001"                  # Unique booth identifier
+booth_name = "Photobooth 1"             # Human-readable name
+api_key = ""                            # Pre-shared API key (optional)
+heartbeat_interval = 10                 # Seconds between heartbeats
+reconnect_delay = 5                     # Initial reconnect delay (seconds)
+reconnect_max_delay = 60                # Max reconnect delay (exponential backoff)
