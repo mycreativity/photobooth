@@ -1,0 +1,66 @@
+version: "3.9"
+
+networks:
+  photobooth:
+    driver: bridge
+
+volumes:
+  server-data:  # SQLite DB + uploaded photos
+
+services:
+  server:
+    build: ./server
+    container_name: pb-server
+    volumes:
+      - server-data:/data                    # Persistent: DB + photos
+      - ./server/src:/app/src                # Dev: live reload source code
+      - ./shared:/app/shared                 # Dev: shared protocol
+    networks:
+      - photobooth
+    ports:
+      - "8000:8000"                          # External: booth WS + API
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:////data/photobooth.db
+      - PHOTOS_DIR=/data/photos
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - SMTP_HOST=${SMTP_HOST:-send.ahasend.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@mycreativity.nl}
+      - SERVER_URL=${SERVER_URL:-http://localhost:8000}
+      - ADMIN_URL=${ADMIN_URL:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-steenweg@gmail.com}
+    restart: unless-stopped
+
+  admin:
+    build: ./admin
+    container_name: pb-admin
+    volumes:
+      - ./admin/src:/app/src                 # Dev: live reload source code
+      - ./admin/public:/app/public
+    networks:
+      - photobooth
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://server:8000           # Internal Docker network (S2S)
+      - NEXT_PUBLIC_WS_URL=${WS_URL:-ws://localhost:8000}
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # public:
+  #   build: ./public
+  #   container_name: pb-public
+  #   volumes:
+  #     - ./public/src:/app/src
+  #   networks:
+  #     - photobooth
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - API_URL=http://server:8000
+  #   depends_on:
+  #     - server
+  #   restart: unless-stopped

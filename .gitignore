@@ -1,13 +1,12 @@
 # Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.egg-info/
-*.egg
+.eggs/
 dist/
 build/
-.eggs/
 
-# Virtual environment
+# Virtual environments
 .venv/
 venv/
 
@@ -15,14 +14,22 @@ venv/
 .idea/
 .vscode/
 *.swp
-*.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Application
-photobooth.db
+# Env
+.env
+
+# Data
+*.db
 photos/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Docker
 *.log
