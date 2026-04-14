@@ -75,6 +75,10 @@ export default function BoothDetailPage({
   const [previewing, setPreviewing] = useState(false);
   const [lastFrame, setLastFrame] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const [logs, setLogs] = useState<Array<{level: string; message: string; logger: string; ts: string}>>([])
+  const [logStreaming, setLogStreaming] = useState(false);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
+  const logWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn()) { router.replace("/login"); return; }
@@ -88,7 +92,23 @@ export default function BoothDetailPage({
     return () => clearInterval(interval);
   }, [boothId]);
 
-  useEffect(() => { return () => { if (wsRef.current) wsRef.current.close(); }; }, []);
+  useEffect(() => { return () => {
+    if (wsRef.current) wsRef.current.close();
+    if (logWsRef.current) logWsRef.current.close();
+  }; }, []);
+
+  // Load initial logs + start streaming
+  useEffect(() => {
+    if (!boothId) return;
+    fetchInitialLogs();
+    startLogStream();
+    return () => { if (logWsRef.current) logWsRef.current.close(); };
+  }, [boothId]);
+
+  // Auto-scroll log panel
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
 
   async function fetchBooth() {
     try {
@@ -124,6 +144,36 @@ export default function BoothDetailPage({
   function stopPreview() {
     if (wsRef.current) { wsRef.current.send(JSON.stringify({ type: "stop_preview" })); wsRef.current.close(); wsRef.current = null; }
     setPreviewing(false); setLastFrame(null);
+  }
+
+  async function fetchInitialLogs() {
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/logs?limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data);
+      }
+    } catch {}
+  }
+
+  function startLogStream() {
+    const token = getAccessToken();
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws/admin/${boothId}?token=${token}`);
+    ws.onopen = () => setLogStreaming(true);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "log") {
+          setLogs(prev => {
+            const next = [...prev, { level: msg.level, message: msg.message, logger: msg.logger, ts: msg.ts }];
+            return next.length > 200 ? next.slice(-200) : next;
+          });
+        }
+      } catch {}
+    };
+    ws.onclose = () => setLogStreaming(false);
+    logWsRef.current = ws;
   }
 
   if (loading) {
@@ -244,6 +294,35 @@ export default function BoothDetailPage({
             )}
           </div>
         </div>
+
+        {/* Log panel — full width */}
+        <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-white">📜 Logs</h2>
+            <div className="flex items-center gap-3">
+              <span className={`flex items-center gap-1.5 text-xs ${logStreaming ? "text-emerald-400" : "text-gray-500"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${logStreaming ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`} />
+                {logStreaming ? "Live" : "Offline"}
+              </span>
+              <button onClick={() => { setLogs([]); fetchInitialLogs(); }} className="text-xs text-gray-500 hover:text-gray-300 transition">Clear</button>
+            </div>
+          </div>
+          <div className="bg-gray-950/50 rounded-xl p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin">
+            {logs.length === 0 ? (
+              <p className="text-gray-600 text-center py-8">Geen logs beschikbaar</p>
+            ) : (
+              logs.map((log, i) => (
+                <div key={i} className="flex gap-2 py-0.5 hover:bg-gray-800/30">
+                  <span className="text-gray-600 shrink-0 w-20">{log.ts ? new Date(log.ts).toLocaleTimeString("nl-NL") : ""}</span>
+                  <LogLevel level={log.level} />
+                  <span className="text-gray-500 shrink-0 w-28 truncate" title={log.logger}>{log.logger?.split(".").pop()}</span>
+                  <span className="text-gray-300 break-all">{log.message}</span>
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </div>
       </main>
     </div>
   );
@@ -266,5 +345,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <dt className="text-sm text-gray-500 shrink-0">{label}</dt>
       <dd className="text-sm text-gray-300 font-medium text-right break-all">{value}</dd>
     </div>
+  );
+}
+
+function LogLevel({ level }: { level: string }) {
+  const colors: Record<string, string> = {
+    DEBUG: "text-gray-500",
+    INFO: "text-blue-400",
+    WARNING: "text-amber-400",
+    ERROR: "text-red-400",
+    CRITICAL: "text-red-300 font-bold",
+  };
+  return (
+    <span className={`shrink-0 w-14 ${colors[level] || colors.INFO}`}>
+      {level}
+    </span>
   );
 }

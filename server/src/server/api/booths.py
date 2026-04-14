@@ -86,6 +86,17 @@ async def get_booth_info(
     }
 
 
+
+@router.get("/{booth_id}/logs")
+async def get_booth_logs(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    limit: int = 100,
+):
+    """Get recent log lines from a booth's ring buffer."""
+    return hub.get_logs(booth_id, limit=min(limit, 200))
+
+
 @router.delete("/{booth_id}")
 async def delete_booth(
     booth_id: str,

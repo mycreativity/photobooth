@@ -1,6 +1,7 @@
 """WebSocket connection hub — manages booth and admin connections."""
 import asyncio
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import WebSocket
@@ -26,6 +27,8 @@ class ConnectionHub:
         self._last_heartbeat: dict[str, datetime] = {}
         # booth_id → full heartbeat info (system metrics + settings)
         self._booth_info: dict[str, dict] = {}
+        # booth_id → log ring buffer (last N log lines)
+        self._booth_logs: dict[str, deque] = {}
 
     @property
     def connected_booths(self) -> list[str]:
@@ -68,6 +71,35 @@ class ConnectionHub:
     def get_booth_info(self, booth_id: str) -> dict:
         """Get the latest system info for a booth."""
         return self._booth_info.get(booth_id, {})
+
+    def append_log(self, booth_id: str, log_entry: dict) -> None:
+        """Store a log line in the ring buffer."""
+        if booth_id not in self._booth_logs:
+            self._booth_logs[booth_id] = deque(maxlen=200)
+        self._booth_logs[booth_id].append(log_entry)
+
+    def get_logs(self, booth_id: str, limit: int = 100) -> list[dict]:
+        """Get recent log lines for a booth."""
+        buf = self._booth_logs.get(booth_id, deque())
+        return list(buf)[-limit:]
+
+    async def relay_log_to_admins(self, booth_id: str, log_entry: dict) -> None:
+        """Send a log entry to all admin viewers watching this booth."""
+        viewers = self._admin_viewers.get(booth_id, set())
+        if not viewers:
+            return
+
+        dead = set()
+        msg = {"type": "log", "booth_id": booth_id, **log_entry}
+
+        for ws in viewers:
+            try:
+                await ws.send_json(msg)
+            except Exception:
+                dead.add(ws)
+
+        for ws in dead:
+            viewers.discard(ws)
 
     async def send_to_booth(self, booth_id: str, message: dict) -> bool:
         """Send a JSON message to a specific booth."""

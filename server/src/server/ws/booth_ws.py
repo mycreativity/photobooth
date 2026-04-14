@@ -96,11 +96,14 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
                 )
 
             elif msg_type == "log":
-                level = msg.get("level", "info").upper()
-                logger.log(
-                    getattr(logging, level, logging.INFO),
-                    "[Booth %s] %s", booth_id, msg.get("message", ""),
-                )
+                log_entry = {
+                    "level": msg.get("level", "INFO"),
+                    "message": msg.get("message", ""),
+                    "logger": msg.get("logger", ""),
+                    "ts": msg.get("ts", ""),
+                }
+                hub.append_log(booth_id, log_entry)
+                await hub.relay_log_to_admins(booth_id, log_entry)
 
             else:
                 logger.debug("Unknown message type from %s: %s", booth_id, msg_type)

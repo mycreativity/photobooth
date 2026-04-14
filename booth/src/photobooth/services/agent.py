@@ -14,9 +14,14 @@ import os
 import platform
 import threading
 import time
+from collections import deque
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Max log lines buffered (sent on next heartbeat if WS is down)
+_LOG_BUFFER_SIZE = 200
 
 
 class BoothAgent:
@@ -54,6 +59,13 @@ class BoothAgent:
         if self._running:
             return
         self._running = True
+
+        # Install log handler that forwards to WS
+        self._log_handler = _WSLogHandler(self)
+        self._log_handler.setLevel(logging.INFO)
+        root = logging.getLogger()
+        root.addHandler(self._log_handler)
+
         self._thread = threading.Thread(
             target=self._run_loop,
             name="booth-agent",
@@ -65,6 +77,9 @@ class BoothAgent:
     def stop(self):
         """Stop the agent."""
         self._running = False
+        # Remove log handler
+        if hasattr(self, '_log_handler'):
+            logging.getLogger().removeHandler(self._log_handler)
         if self._loop:
             self._loop.call_soon_threadsafe(self._loop.stop)
         if self._thread:
@@ -278,3 +293,45 @@ class BoothAgent:
                 await self._ws.send(json.dumps(msg))
             except Exception as e:
                 logger.warning("Send failed: %s", e)
+
+    def send_log(self, level: str, message: str, logger_name: str) -> None:
+        """Queue a log message for sending to the server (thread-safe)."""
+        if not self._ws or not self._loop or not self._running:
+            return
+        msg = {
+            "type": "log",
+            "level": level,
+            "message": message,
+            "logger": logger_name,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            self._loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                self.send_message(msg),
+            )
+        except RuntimeError:
+            pass  # Loop closed
+
+
+class _WSLogHandler(logging.Handler):
+    """Logging handler that forwards records to the admin server via WS.
+
+    Filters out agent-internal logs to avoid infinite recursion.
+    """
+
+    def __init__(self, agent: BoothAgent):
+        super().__init__()
+        self._agent = agent
+        # Loggers to ignore (prevents log loops)
+        self._ignore = {"websockets", "asyncio", __name__}
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Skip internal loggers to avoid loops
+        if record.name in self._ignore or record.name.startswith("websockets"):
+            return
+        try:
+            msg = self.format(record) if self.formatter else record.getMessage()
+            self._agent.send_log(record.levelname, msg, record.name)
+        except Exception:
+            pass  # Never crash the app for logging
