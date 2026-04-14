@@ -1,17 +1,14 @@
-FROM node:20-slim AS base
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
+# Install dependencies (cached layer)
+COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source
+# Copy source (overridden by volume mount in dev)
 COPY . .
 
-# Build
-RUN npm run build
-
+# Dev mode: hot reload
 EXPOSE 3000
-
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]

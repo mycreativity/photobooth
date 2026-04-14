@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAccessToken, clearTokens, isLoggedIn } from "@/lib/auth";
+import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
 
 interface Booth {
   id: string;
@@ -51,10 +51,7 @@ export default function DashboardPage() {
 
   async function fetchBooths() {
     try {
-      const token = getAccessToken();
-      const res = await fetch("/api/api/booths", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await authFetch("/api/api/booths");
 
       if (res.status === 401) {
         clearTokens();

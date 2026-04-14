@@ -1,0 +1,270 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { authFetch, getAccessToken, clearTokens, isLoggedIn } from "@/lib/auth";
+
+interface BoothInfo {
+  id: string;
+  booth_id: string;
+  name: string | null;
+  status: string;
+  last_seen: string | null;
+  version: string | null;
+  // System metrics
+  cpu_percent: number | null;
+  camera_connected: boolean;
+  uptime_seconds: number | null;
+  mem_total_mb: number;
+  mem_used_mb: number;
+  mem_percent: number;
+  cpu_temp: number | null;
+  disk_total_gb: number;
+  disk_used_gb: number;
+  disk_free_gb: number;
+  disk_percent: number;
+  hostname: string;
+  platform: string;
+  python: string;
+  settings: Record<string, unknown>;
+}
+
+function formatUptime(seconds: number | null): string {
+  if (!seconds) return "—";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}u ${m}m`;
+  return h > 0 ? `${h}u ${m}m` : `${m}m`;
+}
+
+function formatLastSeen(iso: string | null): string {
+  if (!iso) return "Nooit";
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return "Nu";
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m geleden`;
+  return d.toLocaleString("nl-NL");
+}
+
+function ProgressBar({ percent, color = "violet" }: { percent: number; color?: string }) {
+  const colorMap: Record<string, string> = {
+    violet: "bg-violet-500",
+    emerald: "bg-emerald-500",
+    amber: "bg-amber-500",
+    red: "bg-red-500",
+  };
+  const barColor = percent > 85 ? colorMap.red : percent > 60 ? colorMap.amber : colorMap[color] || colorMap.violet;
+  return (
+    <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-1">
+      <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${Math.min(percent, 100)}%` }} />
+    </div>
+  );
+}
+
+export default function BoothDetailPage({
+  params,
+}: {
+  params: Promise<{ boothId: string }>;
+}) {
+  const router = useRouter();
+  const [booth, setBooth] = useState<BoothInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [boothId, setBoothId] = useState<string>("");
+  const [previewing, setPreviewing] = useState(false);
+  const [lastFrame, setLastFrame] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (!isLoggedIn()) { router.replace("/login"); return; }
+    params.then((p) => setBoothId(p.boothId));
+  }, [params, router]);
+
+  useEffect(() => {
+    if (!boothId) return;
+    fetchBooth();
+    const interval = setInterval(fetchBooth, 5_000);
+    return () => clearInterval(interval);
+  }, [boothId]);
+
+  useEffect(() => { return () => { if (wsRef.current) wsRef.current.close(); }; }, []);
+
+  async function fetchBooth() {
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/info`);
+      if (res.status === 401) { clearTokens(); router.replace("/login"); return; }
+      if (!res.ok) throw new Error("Booth not found");
+      setBooth(await res.json());
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function togglePreview() { previewing ? stopPreview() : startPreview(); }
+
+  function startPreview() {
+    const token = getAccessToken();
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws/admin/${boothId}?token=${token}`);
+    ws.onopen = () => { setPreviewing(true); ws.send(JSON.stringify({ type: "start_preview" })); };
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "frame" && msg.data) setLastFrame(`data:image/jpeg;base64,${msg.data}`);
+      } catch {}
+    };
+    ws.onclose = () => setPreviewing(false);
+    wsRef.current = ws;
+  }
+
+  function stopPreview() {
+    if (wsRef.current) { wsRef.current.send(JSON.stringify({ type: "stop_preview" })); wsRef.current.close(); wsRef.current = null; }
+    setPreviewing(false); setLastFrame(null);
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+        <div className="w-8 h-8 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !booth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error || "Booth not found"}</p>
+          <button onClick={() => router.push("/")} className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition">← Terug</button>
+        </div>
+      </div>
+    );
+  }
+
+  const isOnline = booth.status === "online";
+  const settings = booth.settings || {};
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      {/* Header */}
+      <header className="border-b border-gray-800/50 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push("/")} className="text-gray-400 hover:text-white transition mr-2">←</button>
+            <span className="text-2xl">📸</span>
+            <div>
+              <h1 className="text-xl font-bold text-white">{booth.name || booth.booth_id}</h1>
+              <p className="text-xs text-gray-500 font-mono">{booth.booth_id}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg border border-gray-700/30 transition" title="Refresh">↻</button>
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" : "bg-gray-600"}`} />
+            <span className="text-sm text-gray-300">{isOnline ? "Online" : "Offline"}</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+
+        {/* Top stats row */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <MetricCard label="CPU" value={`${booth.cpu_percent ?? 0}%`} sub={<ProgressBar percent={booth.cpu_percent ?? 0} />} />
+          <MetricCard label="Temperatuur" value={booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} color={booth.cpu_temp && booth.cpu_temp > 70 ? "red" : booth.cpu_temp && booth.cpu_temp > 55 ? "amber" : "emerald"} />
+          <MetricCard label="Geheugen" value={`${booth.mem_used_mb} / ${booth.mem_total_mb} MB`} sub={<ProgressBar percent={booth.mem_percent} color="violet" />} />
+          <MetricCard label="Schijf" value={`${booth.disk_used_gb} / ${booth.disk_total_gb} GB`} sub={<ProgressBar percent={booth.disk_percent} color="emerald" />} />
+          <MetricCard label="Uptime" value={formatUptime(booth.uptime_seconds)} />
+        </div>
+
+        {/* Main content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Device info */}
+          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">📋 Apparaat</h2>
+            <dl className="space-y-3">
+              <InfoRow label="Booth ID" value={booth.booth_id} />
+              <InfoRow label="Naam" value={booth.name || "—"} />
+              <InfoRow label="Status" value={isOnline ? "🟢 Online" : "⚫ Offline"} />
+              <InfoRow label="Camera" value={booth.camera_connected ? "✓ Verbonden" : "✗ Geen"} />
+              <InfoRow label="Versie" value={booth.version ? `v${booth.version}` : "—"} />
+              <InfoRow label="Hostname" value={booth.hostname || "—"} />
+              <InfoRow label="Platform" value={booth.platform || "—"} />
+              <InfoRow label="Python" value={booth.python || "—"} />
+              <InfoRow label="Laatst gezien" value={formatLastSeen(booth.last_seen)} />
+            </dl>
+          </div>
+
+          {/* Live camera */}
+          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">📷 Camera</h2>
+              <button onClick={togglePreview} disabled={!isOnline}
+                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${previewing ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30" : "bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 border border-violet-500/30"} disabled:opacity-30 disabled:cursor-not-allowed`}>
+                {previewing ? "⏹ Stop" : "▶ Live"}
+              </button>
+            </div>
+            <div className="aspect-video bg-gray-900/50 rounded-xl overflow-hidden flex items-center justify-center">
+              {lastFrame ? (
+                <img src={lastFrame} alt="Live camera feed" className="w-full h-full object-contain" />
+              ) : (
+                <div className="text-center text-gray-600">
+                  <p className="text-3xl mb-2">📷</p>
+                  <p className="text-sm">{isOnline ? "Klik ▶ voor live preview" : "Booth is offline"}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Settings */}
+          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">⚙️ Instellingen</h2>
+            {Object.keys(settings).length > 0 ? (
+              <dl className="space-y-3">
+                <InfoRow label="Event" value={String(settings.event_name || "—")} />
+                <InfoRow label="Taal" value={String(settings.language || "—").toUpperCase()} />
+                <InfoRow label="Thema" value={String(settings.theme || "—")} />
+                <div className="border-t border-gray-700/30 my-2" />
+                <InfoRow label="Camera" value={String(settings.camera_backend || "—")} />
+                <InfoRow label="Resolutie" value={String(settings.resolution || "—")} />
+                <InfoRow label="ISO" value={String(settings.camera_iso || "auto")} />
+                <InfoRow label="Diafragma" value={String(settings.camera_aperture || "auto")} />
+                <InfoRow label="Sluitertijd" value={String(settings.camera_shutter || "auto")} />
+                <div className="border-t border-gray-700/30 my-2" />
+                <InfoRow label="1e Countdown" value={`${settings.first_countdown || "—"}s`} />
+                <InfoRow label="Tussenpauze" value={`${settings.between_shots || "—"}s`} />
+                <InfoRow label="LEDs" value={settings.led_enabled ? `✓ Aan (${settings.led_brightness})` : "Uit"} />
+              </dl>
+            ) : (
+              <p className="text-gray-500 text-sm">Wachten op heartbeat data...</p>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, sub, color = "violet" }: { label: string; value: string; sub?: React.ReactNode; color?: string }) {
+  const colorMap: Record<string, string> = { emerald: "text-emerald-400", red: "text-red-400", amber: "text-amber-400", violet: "text-violet-300", gray: "text-gray-400" };
+  return (
+    <div className="bg-gray-800/30 border border-gray-700/30 rounded-xl p-4">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className={`text-lg font-semibold ${colorMap[color] || colorMap.violet}`}>{value}</p>
+      {sub}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between items-start gap-2">
+      <dt className="text-sm text-gray-500 shrink-0">{label}</dt>
+      <dd className="text-sm text-gray-300 font-medium text-right break-all">{value}</dd>
+    </div>
+  );
+}

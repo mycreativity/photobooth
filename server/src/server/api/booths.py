@@ -10,6 +10,7 @@ from server.auth.permissions import CurrentUser, require_role
 from server.database import get_db
 from server.models.db import Booth
 from server.models.schemas import BoothOut
+from server.ws.hub import hub
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/booths", tags=["booths"])
@@ -41,6 +42,48 @@ async def get_booth(
     if not booth:
         raise HTTPException(status_code=404, detail="Booth not found")
     return booth
+
+
+@router.get("/{booth_id}/info")
+async def get_booth_info(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Get booth DB record + live system info from WebSocket heartbeat."""
+    result = await db.execute(
+        select(Booth).where(Booth.booth_id == booth_id)
+    )
+    booth = result.scalar_one_or_none()
+    if not booth:
+        raise HTTPException(status_code=404, detail="Booth not found")
+
+    # Merge DB data with live heartbeat info
+    live = hub.get_booth_info(booth_id)
+    return {
+        "id": booth.id,
+        "booth_id": booth.booth_id,
+        "name": booth.name,
+        "status": booth.status,
+        "last_seen": booth.last_seen.isoformat() if booth.last_seen else None,
+        "version": booth.version,
+        # Live system metrics
+        "cpu_percent": live.get("cpu", booth.cpu_percent),
+        "camera_connected": live.get("cam_connected", booth.camera_connected),
+        "uptime_seconds": live.get("uptime", booth.uptime_seconds),
+        "mem_total_mb": live.get("mem_total_mb", 0),
+        "mem_used_mb": live.get("mem_used_mb", 0),
+        "mem_percent": live.get("mem_percent", 0),
+        "cpu_temp": live.get("cpu_temp"),
+        "disk_total_gb": live.get("disk_total_gb", 0),
+        "disk_used_gb": live.get("disk_used_gb", 0),
+        "disk_free_gb": live.get("disk_free_gb", 0),
+        "disk_percent": live.get("disk_percent", 0),
+        "hostname": live.get("hostname", ""),
+        "platform": live.get("platform", ""),
+        "python": live.get("python", ""),
+        "settings": live.get("settings", {}),
+    }
 
 
 @router.delete("/{booth_id}")

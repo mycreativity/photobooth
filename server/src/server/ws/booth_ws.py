@@ -51,7 +51,7 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
             msg_type = msg.get("type", "")
 
             if msg_type == "heartbeat":
-                hub.update_heartbeat(booth_id)
+                hub.update_heartbeat(booth_id, msg)
                 # Update booth status in DB
                 async for db in get_db():
                     result = await db.execute(

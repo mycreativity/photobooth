@@ -24,6 +24,8 @@ class ConnectionHub:
         self._admin_viewers: dict[str, set[WebSocket]] = {}
         # booth_id → last heartbeat time
         self._last_heartbeat: dict[str, datetime] = {}
+        # booth_id → full heartbeat info (system metrics + settings)
+        self._booth_info: dict[str, dict] = {}
 
     @property
     def connected_booths(self) -> list[str]:
@@ -57,9 +59,15 @@ class ConnectionHub:
             if not viewers:
                 del self._admin_viewers[booth_id]
 
-    def update_heartbeat(self, booth_id: str) -> None:
-        """Update last heartbeat time for a booth."""
+    def update_heartbeat(self, booth_id: str, info: dict | None = None) -> None:
+        """Update last heartbeat time and store system info."""
         self._last_heartbeat[booth_id] = datetime.now(timezone.utc)
+        if info:
+            self._booth_info[booth_id] = info
+
+    def get_booth_info(self, booth_id: str) -> dict:
+        """Get the latest system info for a booth."""
+        return self._booth_info.get(booth_id, {})
 
     async def send_to_booth(self, booth_id: str, message: dict) -> bool:
         """Send a JSON message to a specific booth."""

@@ -1,16 +1,19 @@
 # Local development overrides
-# Usage: docker compose up (automatically picks up this file)
-#
-# This disables Traefik labels and the external proxy network
-# so you can run everything locally with docker compose up.
+# Automatically used by: docker compose up
+# Disables Traefik and uses dev mode for fast hot reload.
 
 networks:
   proxy:
-    external: false  # Override: create locally instead of expecting external
+    external: false  # Create locally (no Traefik needed)
 
 services:
   server:
-    labels: []  # Override: no Traefik labels locally
+    labels: []
 
   admin:
-    labels: []  # Override: no Traefik labels locally
+    labels: []
+    volumes:
+      - ./admin/src:/app/src             # Hot reload source
+      - ./admin/public:/app/public
+      - /app/node_modules                # Don't override node_modules
+      - /app/.next                       # Don't override .next

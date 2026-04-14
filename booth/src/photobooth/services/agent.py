@@ -155,9 +155,7 @@ class BoothAgent:
             try:
                 heartbeat = {
                     "type": "heartbeat",
-                    "cpu": self._get_cpu_percent(),
-                    "cam_connected": self._is_camera_connected(),
-                    "uptime": int(time.monotonic() - self._start_time),
+                    **self._get_system_info(),
                 }
                 await ws.send(json.dumps(heartbeat))
                 logger.debug("Heartbeat sent")
@@ -165,6 +163,98 @@ class BoothAgent:
                 logger.warning("Heartbeat failed: %s", e)
                 break
             await asyncio.sleep(self._heartbeat_interval)
+
+    def _get_system_info(self) -> dict:
+        """Collect full system metrics."""
+        info = {
+            "cpu": self._get_cpu_percent(),
+            "cam_connected": self._is_camera_connected(),
+            "uptime": int(time.monotonic() - self._start_time),
+            "mem_total_mb": 0,
+            "mem_used_mb": 0,
+            "mem_percent": 0,
+            "cpu_temp": None,
+            "disk_total_gb": 0,
+            "disk_used_gb": 0,
+            "disk_free_gb": 0,
+            "disk_percent": 0,
+            "hostname": platform.node(),
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+        }
+
+        # Memory
+        try:
+            with open("/proc/meminfo") as f:
+                meminfo = {}
+                for line in f:
+                    parts = line.split(":")
+                    if len(parts) == 2:
+                        meminfo[parts[0].strip()] = int(parts[1].strip().split()[0])
+                total = meminfo.get("MemTotal", 0)
+                available = meminfo.get("MemAvailable", 0)
+                info["mem_total_mb"] = total // 1024
+                info["mem_used_mb"] = (total - available) // 1024
+                info["mem_percent"] = round((total - available) / max(total, 1) * 100)
+        except Exception:
+            pass
+
+        # CPU temperature
+        try:
+            temp_path = Path("/sys/class/thermal/thermal_zone0/temp")
+            if temp_path.exists():
+                info["cpu_temp"] = round(int(temp_path.read_text().strip()) / 1000, 1)
+        except Exception:
+            pass
+
+        # Disk usage
+        try:
+            st = os.statvfs("/")
+            total = st.f_blocks * st.f_frsize
+            free = st.f_bavail * st.f_frsize
+            used = total - free
+            info["disk_total_gb"] = round(total / (1024**3), 1)
+            info["disk_used_gb"] = round(used / (1024**3), 1)
+            info["disk_free_gb"] = round(free / (1024**3), 1)
+            info["disk_percent"] = round(used / max(total, 1) * 100)
+        except Exception:
+            pass
+
+        # Current booth settings (from TOML config)
+        try:
+            info["settings"] = self._get_booth_settings()
+        except Exception:
+            info["settings"] = {}
+
+        return info
+
+    def _get_booth_settings(self) -> dict:
+        """Read current booth settings for remote display."""
+        try:
+            import tomllib
+            toml_path = Path("/opt/photobooth/booth.toml")
+            if not toml_path.exists():
+                toml_path = Path("booth.toml")
+            if toml_path.exists():
+                with open(toml_path, "rb") as f:
+                    cfg = tomllib.load(f)
+                return {
+                    "event_name": cfg.get("app", {}).get("event_name", ""),
+                    "language": cfg.get("app", {}).get("language", "nl"),
+                    "theme": cfg.get("app", {}).get("theme", "classic"),
+                    "camera_backend": cfg.get("camera", {}).get("backend", "webcam"),
+                    "camera_iso": cfg.get("camera", {}).get("iso", "auto"),
+                    "camera_aperture": cfg.get("camera", {}).get("aperture", ""),
+                    "camera_shutter": cfg.get("camera", {}).get("shutter_speed", "auto"),
+                    "resolution": f"{cfg.get('app', {}).get('width', '?')}x{cfg.get('app', {}).get('height', '?')}",
+                    "first_countdown": cfg.get("countdown", {}).get("first_countdown", 5),
+                    "between_shots": cfg.get("countdown", {}).get("between_shots", 3),
+                    "led_enabled": cfg.get("led", {}).get("enabled", False),
+                    "led_brightness": cfg.get("led", {}).get("brightness", 0),
+                }
+        except Exception:
+            pass
+        return {}
 
     def _get_cpu_percent(self) -> int:
         """Get CPU usage percentage."""
@@ -177,10 +267,9 @@ class BoothAgent:
 
     def _is_camera_connected(self) -> bool:
         """Check if a camera device is available."""
-        # Simple heuristic — check for video devices on Linux
         if platform.system() == "Linux":
             return Path("/dev/video0").exists()
-        return True  # Assume connected on other platforms
+        return True
 
     async def send_message(self, msg: dict):
         """Send a message to the server (if connected)."""

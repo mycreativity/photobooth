@@ -2953,22 +2953,30 @@ class SettingsScreen(BaseBoothScreen):
         )
         self.add_widget(self._status_label)
 
-        # ----- Bottom buttons: Back | Save -----
+        # ----- Bottom buttons: Back | Restart | Save -----
         self.add_widget(BoothButton(
             text=self.t("settings.back"),
             theme=self.theme,
             variant="ghost",
             on_press=self._go_back,
-            size_hint=(0.3, 0.08),
-            pos_hint={"center_x": 0.3, "center_y": 0.05},
+            size_hint=(0.25, 0.08),
+            pos_hint={"center_x": 0.20, "center_y": 0.05},
+        ))
+        self.add_widget(BoothButton(
+            text="↺ Restart",
+            theme=self.theme,
+            variant="ghost",
+            on_press=self._restart_app,
+            size_hint=(0.25, 0.08),
+            pos_hint={"center_x": 0.50, "center_y": 0.05},
         ))
         self.add_widget(BoothButton(
             text=self.t("settings.save"),
             theme=self.theme,
             variant="primary",
             on_press=self._save_settings,
-            size_hint=(0.3, 0.08),
-            pos_hint={"center_x": 0.7, "center_y": 0.05},
+            size_hint=(0.25, 0.08),
+            pos_hint={"center_x": 0.80, "center_y": 0.05},
         ))
 
     # ---- tab builders -----------------------------------------------------
@@ -3970,19 +3978,35 @@ class SettingsScreen(BaseBoothScreen):
             self.config = app._booth_config
 
     def _do_restart(self, _dt) -> None:
-        """Restart the Kivy app to apply language/theme changes."""
+        """Restart the Kivy app — cleans up LED DMA before exec."""
         import sys
         import os
 
-        logger.info("Restarting application for language/theme change")
+        logger.info("Restarting application")
 
         from kivy.app import App
         app = App.get_running_app()
         if app:
+            # Explicitly release LED strip DMA channel before restart
+            # (on_stop does shutdown but rpi_ws281x needs _cleanup to free DMA)
+            led = getattr(app, '_led', None)
+            if led and led.available and led._strip:
+                try:
+                    led.shutdown()
+                    led._strip._cleanup()
+                    logger.info("LED strip DMA released")
+                except Exception as e:
+                    logger.warning("LED cleanup error: %s", e)
+
             app.stop()
 
         # Re-exec the process to get a clean restart
         os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
+
+    def _restart_app(self) -> None:
+        """Manual restart from settings button."""
+        logger.info("Manual restart requested from settings")
+        Clock.schedule_once(self._do_restart, 0.2)
 
     def _go_back(self) -> None:
         """Navigate back — checks if event exists to determine target."""
