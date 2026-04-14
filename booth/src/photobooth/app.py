@@ -50,6 +50,7 @@ class PhotoboothApp(App):
         self._storage = None
         self._led = None
         self._agent = None
+        self.agent = None  # Public reference (set when agent starts)
         super().__init__(**kwargs)
 
     @property
@@ -143,10 +144,12 @@ class PhotoboothApp(App):
                     "url": server_cfg.url,
                     "booth_id": server_cfg.booth_id,
                     "booth_name": server_cfg.booth_name,
+                    "api_key": getattr(server_cfg, "api_key", ""),
                     "heartbeat_interval": getattr(server_cfg, "heartbeat_interval", 10),
                     "reconnect_delay": getattr(server_cfg, "reconnect_delay", 5),
                     "reconnect_max_delay": getattr(server_cfg, "reconnect_max_delay", 60),
                 })
+                self.agent = self._agent  # Public reference for upload/QR code
                 self._agent.start()
             except Exception as e:
                 logger.warning("Failed to start booth agent: %s", e)
