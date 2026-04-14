@@ -142,6 +142,7 @@ class ServerConfig:
 
     enabled: bool = False
     url: str = "ws://localhost:8000"
+    public_url: str = "https://booth.mycreativity.nl"  # Public gallery URL for QR codes
     booth_id: str = "booth-001"
     booth_name: str = "Photobooth 1"
     api_key: str = ""

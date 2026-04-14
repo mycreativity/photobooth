@@ -2804,12 +2804,28 @@ class DeliverScreen(BaseBoothScreen):
         ))
 
     def _generate_qr(self, qr_widget) -> None:
-        """Generate a QR code for the current session's photos."""
+        """Generate a QR code pointing to the public event gallery."""
         try:
             import qrcode
 
-            session_id = _session.session_id or 0
-            url = f"https://photobooth.local/gallery/{session_id}"
+            # Build URL from config
+            public_url = "https://booth.mycreativity.nl"
+            event_uid = ""
+
+            if self.config and hasattr(self.config, "server"):
+                public_url = self.config.server.public_url or public_url
+
+            # Try to get event UID from storage
+            if self.storage and _session.event_id:
+                event = self.storage.get_active_event()
+                if event:
+                    # Use event slug as fallback identifier
+                    event_uid = event.get("slug", str(_session.event_id))
+
+            if event_uid:
+                url = f"{public_url}/e/{event_uid}"
+            else:
+                url = public_url
 
             qr = qrcode.QRCode(
                 version=1,
@@ -2827,7 +2843,7 @@ class DeliverScreen(BaseBoothScreen):
             core_img = CoreImage(buf, ext="png")
             qr_widget.texture = core_img.texture
 
-            logger.info("QR code generated for session %d: %s", session_id, url)
+            logger.info("QR code generated: %s", url)
 
         except Exception as e:
             logger.error("Failed to generate QR code: %s", e)
