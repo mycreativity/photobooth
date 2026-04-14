@@ -30,13 +30,60 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+# --- Events ---
+
+class EventCreate(BaseModel):
+    """Create a new event."""
+    name: str
+    description: str | None = None
+    date: datetime | None = None
+    location: str | None = None
+
+
+class EventUpdate(BaseModel):
+    """Partial update of an event."""
+    name: str | None = None
+    description: str | None = None
+    date: datetime | None = None
+    location: str | None = None
+    is_active: bool | None = None
+
+
+class EventOut(BaseModel):
+    """Event info returned from API."""
+    id: str
+    uid: str
+    name: str
+    description: str | None
+    date: datetime | None
+    location: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
 # --- Booths ---
+
+class BoothCreate(BaseModel):
+    """Register a new booth (admin chooses booth_id)."""
+    booth_id: str
+    name: str | None = None
+
+
+class BoothUpdate(BaseModel):
+    """Update booth info."""
+    name: str | None = None
+    event_id: str | None = None
+
 
 class BoothOut(BaseModel):
     """Booth info returned from API."""
     id: str
     booth_id: str
     name: str | None
+    event_id: str | None
     status: str
     last_seen: datetime | None
     cpu_percent: int | None
@@ -46,6 +93,14 @@ class BoothOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class BoothCreatedOut(BaseModel):
+    """Response after creating a booth — includes plaintext API key (shown only once)."""
+    id: str
+    booth_id: str
+    name: str | None
+    api_key: str  # plaintext — only returned at creation/regeneration
 
 
 class BoothRegister(BaseModel):
@@ -68,3 +123,4 @@ class UserOut(BaseModel):
     last_login: datetime | None
 
     model_config = {"from_attributes": True}
+

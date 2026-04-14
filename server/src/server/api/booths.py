@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.auth.permissions import CurrentUser, require_role
 from server.database import get_db
-from server.models.db import Booth
-from server.models.schemas import BoothOut
+from server.models.db import Booth, generate_api_key, hash_api_key
+from server.models.schemas import BoothCreate, BoothCreatedOut, BoothOut, BoothUpdate
 from server.ws.hub import hub
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,43 @@ async def list_booths(
     return result.scalars().all()
 
 
+@router.post("", response_model=BoothCreatedOut, status_code=201)
+async def create_booth(
+    body: BoothCreate,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a new booth — generates API key (shown only once)."""
+    # Check if booth_id already exists
+    result = await db.execute(
+        select(Booth).where(Booth.booth_id == body.booth_id)
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"Booth '{body.booth_id}' already exists")
+
+    # Generate API key
+    plaintext_key = generate_api_key()
+    key_hash = hash_api_key(plaintext_key)
+
+    booth = Booth(
+        booth_id=body.booth_id,
+        name=body.name,
+        api_key_hash=key_hash,
+    )
+    db.add(booth)
+    await db.commit()
+    await db.refresh(booth)
+
+    logger.info("Booth created: %s (by %s)", body.booth_id, user.email)
+
+    return BoothCreatedOut(
+        id=booth.id,
+        booth_id=booth.booth_id,
+        name=booth.name,
+        api_key=plaintext_key,
+    )
+
+
 @router.get("/{booth_id}", response_model=BoothOut)
 async def get_booth(
     booth_id: str,
@@ -42,6 +79,59 @@ async def get_booth(
     if not booth:
         raise HTTPException(status_code=404, detail="Booth not found")
     return booth
+
+
+@router.put("/{booth_id}", response_model=BoothOut)
+async def update_booth(
+    booth_id: str,
+    body: BoothUpdate,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Update booth info (name, event coupling)."""
+    result = await db.execute(
+        select(Booth).where(Booth.booth_id == booth_id)
+    )
+    booth = result.scalar_one_or_none()
+    if not booth:
+        raise HTTPException(status_code=404, detail="Booth not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(booth, field, value)
+
+    await db.commit()
+    await db.refresh(booth)
+    logger.info("Booth updated: %s", booth_id)
+    return booth
+
+
+@router.post("/{booth_id}/regenerate-key", response_model=BoothCreatedOut)
+async def regenerate_key(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a new API key for a booth (invalidates the old one)."""
+    result = await db.execute(
+        select(Booth).where(Booth.booth_id == booth_id)
+    )
+    booth = result.scalar_one_or_none()
+    if not booth:
+        raise HTTPException(status_code=404, detail="Booth not found")
+
+    plaintext_key = generate_api_key()
+    booth.api_key_hash = hash_api_key(plaintext_key)
+    await db.commit()
+
+    logger.info("API key regenerated for booth: %s (by %s)", booth_id, user.email)
+
+    return BoothCreatedOut(
+        id=booth.id,
+        booth_id=booth.booth_id,
+        name=booth.name,
+        api_key=plaintext_key,
+    )
 
 
 @router.get("/{booth_id}/info")
@@ -64,6 +154,7 @@ async def get_booth_info(
         "id": booth.id,
         "booth_id": booth.booth_id,
         "name": booth.name,
+        "event_id": booth.event_id,
         "status": booth.status,
         "last_seen": booth.last_seen.isoformat() if booth.last_seen else None,
         "version": booth.version,

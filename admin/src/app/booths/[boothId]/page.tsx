@@ -458,9 +458,8 @@ function SettingsPanel({
           <div>
             <label className={labelClass}>Camera</label>
             <select className={inputClass} value={String(form.camera_backend || "gphoto2")} onChange={e => update("camera_backend", e.target.value)}>
-              <option value="gphoto2">gPhoto2</option>
+              <option value="gphoto2">DSLR (gPhoto2)</option>
               <option value="webcam">Webcam</option>
-              <option value="picamera">PiCamera</option>
             </select>
           </div>
           <div>

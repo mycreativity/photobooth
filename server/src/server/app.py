@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.config import settings
 from server.database import async_session, engine
-from server.models.db import Base, User
+from server.models.db import Base, Booth, Event, User
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,22 @@ async def lifespan(app: FastAPI):
     # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Lightweight migration: add new columns to existing tables
+        # SQLAlchemy's create_all won't add columns to existing tables
+        import sqlalchemy as sa
+        for col_name, col_def in [
+            ("api_key_hash", "VARCHAR(64)"),
+            ("event_id", "VARCHAR(36)"),
+        ]:
+            try:
+                await conn.execute(sa.text(
+                    f"ALTER TABLE booths ADD COLUMN {col_name} {col_def}"
+                ))
+                logger.info("Added column booths.%s", col_name)
+            except Exception:
+                pass  # Column already exists
+
     logger.info("Database tables created")
 
     # Seed admin user
@@ -79,10 +95,14 @@ app.add_middleware(
 
 from server.api import auth as auth_api
 from server.api import booths as booths_api
+from server.api import events as events_api
+from server.api import public as public_api
 from server.ws import booth_ws, admin_ws
 
 app.include_router(auth_api.router)
 app.include_router(booths_api.router)
+app.include_router(events_api.router)
+app.include_router(public_api.router)
 app.include_router(booth_ws.router)
 app.include_router(admin_ws.router)
 

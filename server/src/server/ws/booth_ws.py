@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from server.database import get_db
-from server.models.db import Booth
+from server.models.db import Booth, hash_api_key
 from server.ws.hub import hub
 
 logger = logging.getLogger(__name__)
@@ -18,26 +18,52 @@ router = APIRouter()
 async def booth_websocket(websocket: WebSocket, booth_id: str):
     """Persistent WebSocket connection for a photobooth device.
 
+    Auth: booth must provide api_key as query parameter.
+    If the booth has no api_key_hash set (legacy), connection is allowed with a warning.
+
     Protocol:
     - Booth sends: register, heartbeat, frame, photo_ready, log
     - Server sends: start_preview, stop_preview, update_settings, restart
     """
-    await websocket.accept()
-    hub.register_booth(booth_id, websocket)
+    # --- Authenticate ---
+    api_key = websocket.query_params.get("api_key", "")
 
-    # Create or update booth record in DB
+    booth = None
     async for db in get_db():
         result = await db.execute(
             select(Booth).where(Booth.booth_id == booth_id)
         )
         booth = result.scalar_one_or_none()
-        if not booth:
-            booth = Booth(booth_id=booth_id, status="online")
-            db.add(booth)
-        else:
+
+    # Must accept before we can close with a code
+    await websocket.accept()
+
+    if not booth:
+        logger.warning("WS connect rejected: unknown booth_id=%s", booth_id)
+        await websocket.close(code=4001, reason="Unknown booth")
+        return
+
+    # Validate API key (if booth has one set)
+    if booth.api_key_hash:
+        if not api_key or hash_api_key(api_key) != booth.api_key_hash:
+            logger.warning("WS connect rejected: invalid API key for booth=%s", booth_id)
+            await websocket.close(code=4001, reason="Invalid API key")
+            return
+    else:
+        logger.warning("Booth %s has no API key set — allowing connection (legacy mode)", booth_id)
+
+    hub.register_booth(booth_id, websocket)
+
+    # Update booth status in DB
+    async for db in get_db():
+        result = await db.execute(
+            select(Booth).where(Booth.booth_id == booth_id)
+        )
+        booth = result.scalar_one_or_none()
+        if booth:
             booth.status = "online"
             booth.last_seen = datetime.now(timezone.utc)
-        await db.commit()
+            await db.commit()
 
     try:
         while True:

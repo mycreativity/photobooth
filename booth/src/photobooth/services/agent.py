@@ -124,7 +124,10 @@ class BoothAgent:
             return
 
         ws_url = f"{self._url}/ws/booth/{self._booth_id}"
-        logger.info("Connecting to %s ...", ws_url)
+        api_key = self._config.get("api_key", "")
+        if api_key:
+            ws_url += f"?api_key={api_key}"
+        logger.info("Connecting to %s ...", ws_url.split("?")[0])  # Don't log the key
 
         async with websockets.connect(ws_url, ping_interval=20, ping_timeout=10) as ws:
             self._ws = ws

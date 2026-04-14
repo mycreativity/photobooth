@@ -68,23 +68,23 @@ services:
       - server
     restart: unless-stopped
 
-  # public:
-  #   build: ./public
-  #   container_name: pb-public
-  #   networks:
-  #     - photobooth
-  #     - proxy
-  #   ports:
-  #     - "3001:3000"
-  #   environment:
-  #     - API_URL=http://server:8000
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.pb-public.rule=Host(`booth.mycreativity.nl`)"
-  #     - "traefik.http.routers.pb-public.entrypoints=websecure"
-  #     - "traefik.http.routers.pb-public.tls.certresolver=letsencrypt"
-  #     - "traefik.http.services.pb-public.loadbalancer.server.port=3000"
-  #     - "traefik.docker.network=proxy"
-  #   depends_on:
-  #     - server
-  #   restart: unless-stopped
+  public:
+    build: ./public
+    container_name: pb-public
+    networks:
+      - photobooth
+      - proxy
+    ports:
+      - "3001:3000"
+    environment:
+      - API_URL=http://server:8000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pb-public.rule=Host(`booth.mycreativity.nl`)"
+      - "traefik.http.routers.pb-public.entrypoints=websecure"
+      - "traefik.http.routers.pb-public.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pb-public.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
+    depends_on:
+      - server
+    restart: unless-stopped

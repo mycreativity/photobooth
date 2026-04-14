@@ -17,3 +17,11 @@ services:
       - ./admin/public:/app/public
       - /app/node_modules                # Don't override node_modules
       - /app/.next                       # Don't override .next
+
+  public:
+    labels: []
+    volumes:
+      - ./public/app:/app/app            # Hot reload source
+      - ./public/public:/app/public
+      - /app/node_modules
+      - /app/.next
