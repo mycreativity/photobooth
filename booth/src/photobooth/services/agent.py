@@ -153,6 +153,10 @@ class BoothAgent:
 
                     if msg_type == "ack":
                         logger.info("Server ACK: %s", msg.get("status"))
+                    elif msg_type == "update_settings":
+                        self._handle_update_settings(msg.get("settings", {}))
+                    elif msg_type == "restart":
+                        self._handle_restart()
                     elif msg_type in self._command_handlers:
                         try:
                             self._command_handlers[msg_type](msg)
@@ -178,6 +182,115 @@ class BoothAgent:
                 logger.warning("Heartbeat failed: %s", e)
                 break
             await asyncio.sleep(self._heartbeat_interval)
+
+    def _handle_update_settings(self, settings: dict) -> None:
+        """Update booth.toml with new settings from admin.
+
+        Keys map to TOML sections:
+        - event_name → [app].event_name
+        - language → [app].language
+        - theme → [app].theme
+        - first_countdown → [countdown].first_countdown
+        - between_shots → [countdown].between_shots
+        - camera_backend → [camera].backend
+        - camera_iso → [camera].iso
+        - camera_aperture → [camera].aperture
+        - camera_shutter → [camera].shutter_speed
+        - led_enabled → [led].enabled
+        - led_brightness → [led].brightness
+        """
+        if not settings:
+            return
+
+        toml_path = Path("/opt/photobooth/booth.toml")
+        if not toml_path.exists():
+            toml_path = Path("booth.toml")
+        if not toml_path.exists():
+            logger.error("Cannot find booth.toml to update")
+            return
+
+        try:
+            import tomllib
+            with open(toml_path, "rb") as f:
+                cfg = tomllib.load(f)
+        except Exception as e:
+            logger.error("Failed to read booth.toml: %s", e)
+            return
+
+        # Map flat keys to TOML structure
+        key_map = {
+            "event_name": ("app", "event_name"),
+            "language": ("app", "language"),
+            "theme": ("app", "theme"),
+            "first_countdown": ("countdown", "first_countdown"),
+            "between_shots": ("countdown", "between_shots"),
+            "camera_backend": ("camera", "backend"),
+            "camera_iso": ("camera", "iso"),
+            "camera_aperture": ("camera", "aperture"),
+            "camera_shutter": ("camera", "shutter_speed"),
+            "led_enabled": ("led", "enabled"),
+            "led_brightness": ("led", "brightness"),
+        }
+
+        changed = []
+        for key, value in settings.items():
+            if key in key_map:
+                section, field = key_map[key]
+                if section not in cfg:
+                    cfg[section] = {}
+                old = cfg[section].get(field)
+                cfg[section][field] = value
+                if old != value:
+                    changed.append(f"{section}.{field}: {old} → {value}")
+
+        if not changed:
+            logger.info("No settings changed")
+            return
+
+        # Write back using toml format (manual, preserves structure)
+        self._write_toml(toml_path, cfg)
+        logger.info("Settings updated: %s", "; ".join(changed))
+
+    def _write_toml(self, path: Path, cfg: dict) -> None:
+        """Write a dict back to TOML format."""
+        lines = []
+        # Write top-level keys first (unlikely but handle gracefully)
+        for key, value in cfg.items():
+            if not isinstance(value, dict):
+                lines.append(f"{key} = {self._toml_value(value)}")
+        if lines:
+            lines.append("")
+
+        # Write sections
+        for section, values in cfg.items():
+            if isinstance(values, dict):
+                lines.append(f"[{section}]")
+                for key, value in values.items():
+                    lines.append(f"{key} = {self._toml_value(value)}")
+                lines.append("")
+
+        path.write_text("\n".join(lines))
+
+    @staticmethod
+    def _toml_value(v) -> str:
+        """Format a Python value as TOML."""
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, int):
+            return str(v)
+        if isinstance(v, float):
+            return str(v)
+        if isinstance(v, str):
+            return f'"{v}"'
+        return f'"{v}"'
+
+    def _handle_restart(self) -> None:
+        """Restart the booth app process."""
+        import sys
+        logger.info("Remote restart requested by admin")
+        # Give a moment for the log to be sent
+        time.sleep(0.5)
+        os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
 
     def _get_system_info(self) -> dict:
         """Collect full system metrics."""

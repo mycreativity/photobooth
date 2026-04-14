@@ -97,6 +97,45 @@ async def get_booth_logs(
     return hub.get_logs(booth_id, limit=min(limit, 200))
 
 
+@router.post("/{booth_id}/settings")
+async def update_booth_settings(
+    booth_id: str,
+    settings: dict,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+):
+    """Push settings to a booth via WebSocket.
+
+    The booth agent will update its booth.toml and optionally restart.
+    """
+    if not hub.is_booth_connected(booth_id):
+        raise HTTPException(status_code=503, detail="Booth is offline")
+
+    sent = await hub.send_to_booth(booth_id, {
+        "type": "update_settings",
+        "settings": settings,
+    })
+    if not sent:
+        raise HTTPException(status_code=503, detail="Failed to send to booth")
+
+    return {"message": "Settings sent", "booth_id": booth_id}
+
+
+@router.post("/{booth_id}/restart")
+async def restart_booth(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+):
+    """Send a restart command to a booth."""
+    if not hub.is_booth_connected(booth_id):
+        raise HTTPException(status_code=503, detail="Booth is offline")
+
+    sent = await hub.send_to_booth(booth_id, {"type": "restart"})
+    if not sent:
+        raise HTTPException(status_code=503, detail="Failed to send to booth")
+
+    return {"message": "Restart command sent", "booth_id": booth_id}
+
+
 @router.delete("/{booth_id}")
 async def delete_booth(
     booth_id: str,

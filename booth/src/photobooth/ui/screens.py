@@ -326,8 +326,12 @@ class LivePreviewLayer(FloatLayout):
         if self._preview_event:
             self._preview_event.cancel()
             self._preview_event = None
-        self._camera.stop_preview()
+        try:
+            self._camera.stop_preview()
+        except Exception as e:
+            logger.warning("Camera stop_preview failed (offline?): %s", e)
 
+        # Always resume video, even if camera is gone
         self._preview_image.opacity = 0
         if self._video_widget:
             self._video_widget.opacity = 1
@@ -1203,8 +1207,10 @@ class IdleScreen(BaseBoothScreen):
         super().on_enter(*args)
         # Reset session state
         _session.reset()
-        # Reset preview filter to default
+        # Ensure camera preview is stopped and video resumes
+        # (covers returning from capture error or any screen)
         if self.preview_layer:
+            self.preview_layer.stop_camera_preview()
             self.preview_layer.set_preview_filter("classic")
         # LED: warm ambient glow
         if self.led:

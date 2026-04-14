@@ -270,29 +270,8 @@ export default function BoothDetailPage({
             </div>
           </div>
 
-          {/* Settings */}
-          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">⚙️ Instellingen</h2>
-            {Object.keys(settings).length > 0 ? (
-              <dl className="space-y-3">
-                <InfoRow label="Event" value={String(settings.event_name || "—")} />
-                <InfoRow label="Taal" value={String(settings.language || "—").toUpperCase()} />
-                <InfoRow label="Thema" value={String(settings.theme || "—")} />
-                <div className="border-t border-gray-700/30 my-2" />
-                <InfoRow label="Camera" value={String(settings.camera_backend || "—")} />
-                <InfoRow label="Resolutie" value={String(settings.resolution || "—")} />
-                <InfoRow label="ISO" value={String(settings.camera_iso || "auto")} />
-                <InfoRow label="Diafragma" value={String(settings.camera_aperture || "auto")} />
-                <InfoRow label="Sluitertijd" value={String(settings.camera_shutter || "auto")} />
-                <div className="border-t border-gray-700/30 my-2" />
-                <InfoRow label="1e Countdown" value={`${settings.first_countdown || "—"}s`} />
-                <InfoRow label="Tussenpauze" value={`${settings.between_shots || "—"}s`} />
-                <InfoRow label="LEDs" value={settings.led_enabled ? `✓ Aan (${settings.led_brightness})` : "Uit"} />
-              </dl>
-            ) : (
-              <p className="text-gray-500 text-sm">Wachten op heartbeat data...</p>
-            )}
-          </div>
+          {/* Settings Editor */}
+          <SettingsPanel settings={settings} boothId={boothId} isOnline={isOnline} onSaved={fetchBooth} />
         </div>
 
         {/* Log panel — full width */}
@@ -360,5 +339,187 @@ function LogLevel({ level }: { level: string }) {
     <span className={`shrink-0 w-14 ${colors[level] || colors.INFO}`}>
       {level}
     </span>
+  );
+}
+
+function SettingsPanel({
+  settings,
+  boothId,
+  isOnline,
+  onSaved,
+}: {
+  settings: Record<string, unknown>;
+  boothId: string;
+  isOnline: boolean;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<Record<string, unknown>>({});
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ type: "ok" | "error"; msg: string } | null>(null);
+
+  // Init form from live settings
+  useEffect(() => {
+    if (Object.keys(settings).length > 0 && Object.keys(form).length === 0) {
+      setForm({ ...settings });
+    }
+  }, [settings]);
+
+  function update(key: string, value: unknown) {
+    setForm(prev => ({ ...prev, [key]: value }));
+    setStatus(null);
+  }
+
+  async function save() {
+    setSaving(true);
+    setStatus(null);
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/settings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Failed");
+      }
+      setStatus({ type: "ok", msg: "Opgeslagen ✓" });
+      setTimeout(() => onSaved(), 2000);
+    } catch (err) {
+      setStatus({ type: "error", msg: err instanceof Error ? err.message : "Error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function restart() {
+    if (!confirm("Wil je de booth herstarten?")) return;
+    try {
+      await authFetch(`/api/api/booths/${boothId}/restart`, { method: "POST" });
+      setStatus({ type: "ok", msg: "Herstart verzonden" });
+    } catch {
+      setStatus({ type: "error", msg: "Herstart mislukt" });
+    }
+  }
+
+  const inputClass = "w-full bg-gray-900/50 border border-gray-700/40 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-violet-500/50 focus:outline-none transition";
+  const labelClass = "text-xs text-gray-500 mb-0.5";
+
+  if (Object.keys(settings).length === 0) {
+    return (
+      <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">⚙️ Instellingen</h2>
+        <p className="text-gray-500 text-sm">Wachten op heartbeat data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-white">⚙️ Instellingen</h2>
+        {status && (
+          <span className={`text-xs px-2 py-0.5 rounded ${status.type === "ok" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+            {status.msg}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {/* Event */}
+        <div>
+          <label className={labelClass}>Event naam</label>
+          <input className={inputClass} value={String(form.event_name || "")} onChange={e => update("event_name", e.target.value)} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Taal</label>
+            <select className={inputClass} value={String(form.language || "nl")} onChange={e => update("language", e.target.value)}>
+              <option value="nl">NL</option>
+              <option value="en">EN</option>
+              <option value="de">DE</option>
+              <option value="fr">FR</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Thema</label>
+            <select className={inputClass} value={String(form.theme || "classic")} onChange={e => update("theme", e.target.value)}>
+              <option value="classic">Classic</option>
+              <option value="neon">Neon</option>
+              <option value="elegant">Elegant</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-700/30 my-1" />
+
+        {/* Camera */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Camera</label>
+            <select className={inputClass} value={String(form.camera_backend || "gphoto2")} onChange={e => update("camera_backend", e.target.value)}>
+              <option value="gphoto2">gPhoto2</option>
+              <option value="webcam">Webcam</option>
+              <option value="picamera">PiCamera</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>ISO</label>
+            <input className={inputClass} value={String(form.camera_iso || "")} onChange={e => update("camera_iso", e.target.value)} placeholder="auto" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>Diafragma</label>
+            <input className={inputClass} value={String(form.camera_aperture || "")} onChange={e => update("camera_aperture", e.target.value)} placeholder="auto" />
+          </div>
+          <div>
+            <label className={labelClass}>Sluitertijd</label>
+            <input className={inputClass} value={String(form.camera_shutter || "")} onChange={e => update("camera_shutter", e.target.value)} placeholder="auto" />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-700/30 my-1" />
+
+        {/* Countdown */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>1e Countdown (sec)</label>
+            <input type="number" className={inputClass} value={Number(form.first_countdown || 5)} onChange={e => update("first_countdown", parseInt(e.target.value) || 5)} min={1} max={30} />
+          </div>
+          <div>
+            <label className={labelClass}>Tussenpauze (sec)</label>
+            <input type="number" className={inputClass} value={Number(form.between_shots || 3)} onChange={e => update("between_shots", parseInt(e.target.value) || 3)} min={1} max={30} />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-700/30 my-1" />
+
+        {/* LEDs */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="led-toggle" className="accent-violet-500" checked={!!form.led_enabled} onChange={e => update("led_enabled", e.target.checked)} />
+            <label htmlFor="led-toggle" className="text-sm text-gray-400">LEDs aan</label>
+          </div>
+          <div>
+            <label className={labelClass}>Helderheid (0-255)</label>
+            <input type="number" className={inputClass} value={Number(form.led_brightness || 100)} onChange={e => update("led_brightness", parseInt(e.target.value) || 100)} min={0} max={255} />
+          </div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2 mt-5">
+        <button onClick={save} disabled={!isOnline || saving}
+          className="flex-1 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
+          {saving ? "Opslaan..." : "💾 Opslaan"}
+        </button>
+        <button onClick={restart} disabled={!isOnline}
+          className="px-4 py-2 text-sm font-medium bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
+          🔄 Herstart
+        </button>
+      </div>
+    </div>
   );
 }
