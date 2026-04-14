@@ -98,3 +98,33 @@ class Booth(Base):
     uptime_seconds = Column(Integer, nullable=True)
     version = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Session(Base):
+    """Photo sessions — one per capture flow on the booth."""
+    __tablename__ = "sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id = Column(String(36), nullable=True, index=True)
+    booth_id = Column(String(100), nullable=True)
+    photo_count = Column(Integer, default=0)
+    layout = Column(String(50), nullable=True)
+    filter_name = Column(String(100), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Photo(Base):
+    """Photos uploaded from booths."""
+    __tablename__ = "photos"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), nullable=True, index=True)
+    event_id = Column(String(36), nullable=True, index=True)
+    booth_id = Column(String(100), nullable=True)
+    seq = Column(Integer, default=1)
+    variant = Column(String(50), default="final")  # original | final | print
+    filename = Column(String(500), nullable=False)  # relative path on server
+    width = Column(Integer, default=0)
+    height = Column(Integer, default=0)
+    size_bytes = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now())

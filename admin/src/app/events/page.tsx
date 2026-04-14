@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
-import { QRCodeSVG } from "qrcode.react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -528,10 +527,12 @@ export default function EventsPage() {
               Scan voor de publieke galerij
             </p>
             <div className="inline-flex p-4 bg-white rounded-2xl mb-4">
-              <QRCodeSVG
-                value={`${PUBLIC_BASE}/${qrEvent.uid}`}
-                size={200}
-                level="M"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${PUBLIC_BASE}/${qrEvent.uid}`)}`}
+                alt={`QR code voor ${qrEvent.name}`}
+                width={200}
+                height={200}
               />
             </div>
             <p className="text-xs text-gray-500 font-mono mb-1">

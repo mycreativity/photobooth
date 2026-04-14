@@ -18,6 +18,8 @@ dependencies = [
     "opencv-python-headless>=4.8",
     "Pillow>=10.0",
     "qrcode>=7.4",
+    "websockets>=12.0",
+    "aiohttp>=3.9",
 ]
 
 [project.optional-dependencies]

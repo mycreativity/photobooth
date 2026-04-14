@@ -2603,6 +2603,14 @@ class ReviewScreen(BaseBoothScreen):
                 except Exception as e:
                     logger.error("Failed to generate print composite: %s", e)
 
+                # Step 4: Upload to server
+                Clock.schedule_once(lambda _: self._loading.update(
+                    "Uploading...") if hasattr(self, '_loading') and self._loading else None, 0)
+                try:
+                    self._upload_session_photos(_session)
+                except Exception as e:
+                    logger.error("Photo upload failed: %s", e)
+
         except Exception as e:
             logger.error("Accept processing failed: %s", e)
 
@@ -2618,6 +2626,43 @@ class ReviewScreen(BaseBoothScreen):
                 self._loading.parent.remove_widget(self._loading)
             self._loading = None
         self.navigate_to(SCREEN_DELIVER)
+
+    def _upload_session_photos(self, session) -> None:
+        """Upload final photos to the server for the public gallery."""
+        agent = getattr(self, '_agent', None)
+        if not agent:
+            # Try to find agent from the app
+            from kivy.app import App
+            app = App.get_running_app()
+            agent = getattr(app, 'agent', None)
+
+        if not agent:
+            logger.debug("No agent available — skipping upload")
+            return
+
+        if not self.storage or not session.session_id:
+            return
+
+        # Get all final photos for this session
+        photos = self.storage.get_session_photos(session.session_id)
+        upload_list = []
+
+        for photo in photos:
+            if photo.get("variant") != "final":
+                continue
+            file_path = self.storage.get_photo_path(photo["filename"])
+            if file_path.exists():
+                upload_list.append({
+                    "file_path": str(file_path),
+                    "event_id": str(session.event_id or ""),
+                    "session_id": str(session.session_id),
+                    "seq": photo.get("seq", 1),
+                    "variant": "final",
+                })
+
+        if upload_list:
+            logger.info("Queuing %d photos for upload", len(upload_list))
+            agent.upload_photos(upload_list)
 
     def _go_to_idle(self, _dt) -> None:
         self.navigate_to(SCREEN_IDLE)

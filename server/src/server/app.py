@@ -96,12 +96,14 @@ app.add_middleware(
 from server.api import auth as auth_api
 from server.api import booths as booths_api
 from server.api import events as events_api
+from server.api import photos as photos_api
 from server.api import public as public_api
 from server.ws import booth_ws, admin_ws
 
 app.include_router(auth_api.router)
 app.include_router(booths_api.router)
 app.include_router(events_api.router)
+app.include_router(photos_api.router)
 app.include_router(public_api.router)
 app.include_router(booth_ws.router)
 app.include_router(admin_ws.router)

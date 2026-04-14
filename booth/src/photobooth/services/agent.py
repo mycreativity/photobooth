@@ -295,6 +295,79 @@ class BoothAgent:
         time.sleep(0.5)
         os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
 
+    async def _upload_photo(
+        self,
+        file_path: str,
+        event_id: str = "",
+        session_id: str = "",
+        seq: int = 1,
+        variant: str = "final",
+    ) -> dict | None:
+        """Upload a single photo to the server via HTTP POST."""
+        import aiohttp
+
+        path = Path(file_path)
+        if not path.exists():
+            logger.warning("Upload skipped — file not found: %s", file_path)
+            return None
+
+        # Convert WS URL to HTTP
+        http_url = self._url.replace("ws://", "http://").replace("wss://", "https://")
+        upload_url = f"{http_url}/api/photos/upload"
+
+        try:
+            data = aiohttp.FormData()
+            data.add_field("file", path.read_bytes(),
+                          filename=path.name,
+                          content_type="image/jpeg")
+            data.add_field("event_id", event_id)
+            data.add_field("booth_id", self._booth_id)
+            data.add_field("session_id", session_id)
+            data.add_field("seq", str(seq))
+            data.add_field("variant", variant)
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(upload_url, data=data, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        logger.info("Photo uploaded: %s → %s", path.name, result.get("filename"))
+                        return result
+                    else:
+                        body = await resp.text()
+                        logger.error("Upload failed (%d): %s", resp.status, body[:200])
+                        return None
+        except Exception as e:
+            logger.error("Upload error: %s", e)
+            return None
+
+    def upload_photos(self, photos: list[dict]) -> None:
+        """Queue photo uploads to the server (thread-safe).
+
+        Each dict should have: file_path, event_id, session_id, seq, variant.
+        Called from the Kivy main thread after a session completes.
+        """
+        if not self._loop or not self._running:
+            logger.warning("Agent not running — skipping photo upload")
+            return
+
+        async def _do_uploads():
+            for photo in photos:
+                await self._upload_photo(
+                    file_path=photo["file_path"],
+                    event_id=photo.get("event_id", ""),
+                    session_id=photo.get("session_id", ""),
+                    seq=photo.get("seq", 1),
+                    variant=photo.get("variant", "final"),
+                )
+
+        try:
+            self._loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                _do_uploads(),
+            )
+        except RuntimeError:
+            pass
+
     def _get_system_info(self) -> dict:
         """Collect full system metrics."""
         info = {
