@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from server.database import get_db
-from server.models.db import Booth, hash_api_key
+from server.models.db import Booth, Event, hash_api_key
 from server.ws.hub import hub
 
 logger = logging.getLogger(__name__)
@@ -97,6 +97,8 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
                     "Booth registered: %s (name=%s, version=%s)",
                     booth_id, msg.get("name"), msg.get("version"),
                 )
+                event_id = None
+                event_uid = None
                 async for db in get_db():
                     result = await db.execute(
                         select(Booth).where(Booth.booth_id == booth_id)
@@ -107,9 +109,23 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
                         booth.version = msg.get("version", booth.version)
                         booth.status = "online"
                         booth.last_seen = datetime.now(timezone.utc)
+                        event_id = booth.event_id
                         await db.commit()
+                        # Resolve event UID
+                        if event_id:
+                            ev_result = await db.execute(
+                                select(Event).where(Event.id == event_id)
+                            )
+                            ev = ev_result.scalar_one_or_none()
+                            if ev:
+                                event_uid = ev.uid
 
-                await websocket.send_json({"type": "ack", "status": "registered"})
+                await websocket.send_json({
+                    "type": "ack",
+                    "status": "registered",
+                    "event_id": event_id,
+                    "event_uid": event_uid,
+                })
 
             elif msg_type == "frame":
                 # Relay camera frame to any admin viewers

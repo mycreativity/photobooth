@@ -18,6 +18,7 @@ interface Event {
   is_active: boolean;
   created_at: string;
   updated_at: string | null;
+  photo_count?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -329,6 +330,14 @@ export default function EventsPage() {
                       <p className="text-sm text-gray-500 truncate max-w-lg">
                         {ev.description}
                       </p>
+                    )}
+                    {(ev.photo_count ?? 0) > 0 && (
+                      <a
+                        href={`/events/${ev.uid}/photos`}
+                        className="inline-flex items-center gap-1 mt-2 text-xs text-violet-400 hover:text-violet-300 transition"
+                      >
+                        📷 {ev.photo_count} foto{ev.photo_count !== 1 ? "'s" : ""} bekijken →
+                      </a>
                     )}
                   </div>
 

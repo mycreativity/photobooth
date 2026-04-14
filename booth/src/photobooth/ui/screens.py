@@ -2643,6 +2643,9 @@ class ReviewScreen(BaseBoothScreen):
         if not self.storage or not session.session_id:
             return
 
+        # Use the server's event ID (UUID), not the local integer
+        server_event_id = agent.server_event_id or ""
+
         # Get all final photos for this session
         photos = self.storage.get_session_photos(session.session_id)
         upload_list = []
@@ -2654,7 +2657,7 @@ class ReviewScreen(BaseBoothScreen):
             if file_path.exists():
                 upload_list.append({
                     "file_path": str(file_path),
-                    "event_id": str(session.event_id or ""),
+                    "event_id": server_event_id,
                     "session_id": str(session.session_id),
                     "seq": photo.get("seq", 1),
                     "variant": "final",
@@ -2816,11 +2819,12 @@ class DeliverScreen(BaseBoothScreen):
                 public_url = self.config.server.public_url or public_url
 
             # Try to get event UID from storage
-            if self.storage and _session.event_id:
-                event = self.storage.get_active_event()
-                if event:
-                    # Use event slug as fallback identifier
-                    event_uid = event.get("slug", str(_session.event_id))
+            # Get event UID from agent (received from server)
+            from kivy.app import App
+            app = App.get_running_app()
+            agent = getattr(app, 'agent', None)
+            if agent and agent.server_event_uid:
+                event_uid = agent.server_event_uid
 
             if event_uid:
                 url = f"{public_url}/e/{event_uid}"

@@ -42,6 +42,10 @@ class BoothAgent:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._start_time = time.monotonic()
 
+        # Server-assigned event info (received on registration)
+        self.server_event_id: str = ""
+        self.server_event_uid: str = ""
+
         # Callbacks for commands from server
         self._command_handlers: dict[str, callable] = {}
 
@@ -156,6 +160,11 @@ class BoothAgent:
 
                     if msg_type == "ack":
                         logger.info("Server ACK: %s", msg.get("status"))
+                        # Store server event info if provided
+                        if msg.get("event_id"):
+                            self.server_event_id = msg["event_id"]
+                            self.server_event_uid = msg.get("event_uid", "")
+                            logger.info("Server event: id=%s uid=%s", self.server_event_id, self.server_event_uid)
                     elif msg_type == "update_settings":
                         self._handle_update_settings(msg.get("settings", {}))
                     elif msg_type == "restart":
