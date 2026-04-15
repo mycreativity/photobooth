@@ -3,7 +3,7 @@
 Runs as a background thread alongside the Kivy main loop.
 Handles:
 - Registration with the server
-- Periodic heartbeats (CPU %, camera status, uptime)
+- Periodic heartbeats (CPU %, camera status, uptime, power usage)
 - Receiving commands (start/stop preview, update settings, restart)
 - Reconnection with exponential backoff
 """
@@ -12,6 +12,8 @@ import json
 import logging
 import os
 import platform
+import re
+import subprocess
 import threading
 import time
 from collections import deque
@@ -394,6 +396,11 @@ class BoothAgent:
             "hostname": platform.node(),
             "platform": platform.platform(),
             "python": platform.python_version(),
+            # Power / electricity
+            "power_voltage": None,
+            "power_current_a": None,
+            "power_watts": None,
+            "power_throttled": None,
         }
 
         # Memory
@@ -433,6 +440,13 @@ class BoothAgent:
         except Exception:
             pass
 
+        # Power / electricity info
+        try:
+            power = self._get_power_info()
+            info.update(power)
+        except Exception:
+            pass
+
         # Current booth settings (from TOML config)
         try:
             info["settings"] = self._get_booth_settings()
@@ -440,6 +454,108 @@ class BoothAgent:
             info["settings"] = {}
 
         return info
+
+    def _get_power_info(self) -> dict:
+        """Read power/electricity data from the Raspberry Pi.
+
+        On Pi 5: uses `vcgencmd pmic_read_adc` to read voltage and current
+        from the PMIC rails, then sums up total board power consumption.
+
+        On all Pis: uses `vcgencmd get_throttled` to report undervoltage
+        and throttling state.
+
+        Returns dict with keys: power_voltage, power_current_a, power_watts,
+        power_throttled.
+        """
+        result: dict = {}
+
+        # --- Throttle status (works on all Pis) ---
+        try:
+            out = subprocess.run(
+                ["vcgencmd", "get_throttled"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if out.returncode == 0:
+                # Output: throttled=0x0
+                val = out.stdout.strip().split("=")[-1]
+                flags = int(val, 16) if val.startswith("0x") else int(val)
+                # Decode throttle flags
+                issues = []
+                if flags & 0x1:
+                    issues.append("undervoltage")
+                if flags & 0x2:
+                    issues.append("freq_capped")
+                if flags & 0x4:
+                    issues.append("throttled")
+                if flags & 0x8:
+                    issues.append("temp_limit")
+                # Historical flags (bits 16-19)
+                if flags & 0x10000:
+                    issues.append("was_undervoltage")
+                if flags & 0x20000:
+                    issues.append("was_freq_capped")
+                if flags & 0x40000:
+                    issues.append("was_throttled")
+                if flags & 0x80000:
+                    issues.append("was_temp_limit")
+                result["power_throttled"] = ",".join(issues) if issues else "ok"
+        except Exception:
+            pass
+
+        # --- PMIC ADC readings (Raspberry Pi 5 only) ---
+        try:
+            out = subprocess.run(
+                ["vcgencmd", "pmic_read_adc"],
+                capture_output=True, text=True, timeout=3,
+            )
+            if out.returncode == 0 and out.stdout.strip():
+                total_power_mw = 0.0
+                ext5v_voltage = None
+
+                for line in out.stdout.strip().splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    # Parse voltage lines: "EXT5V_V volt(24)=5.08262000V"
+                    v_match = re.match(
+                        r"(\S+)\s+volt\(\d+\)\s*=\s*([\d.]+)V", line
+                    )
+                    if v_match:
+                        rail_name = v_match.group(1)
+                        volts = float(v_match.group(2))
+                        if rail_name == "EXT5V_V":
+                            ext5v_voltage = round(volts, 2)
+                        continue
+
+                    # Parse current lines: "VDD_CORE_A current(7)=0.88407000A"
+                    c_match = re.match(
+                        r"(\S+)\s+current\(\d+\)\s*=\s*([\d.]+)A", line
+                    )
+                    if c_match:
+                        rail_name = c_match.group(1)
+                        amps = float(c_match.group(2))
+                        # Estimate power per rail (V × I); using 5V as
+                        # approximate input voltage for total board power
+                        # The actual rail voltage varies but 5V input is
+                        # what matters for total consumption
+                        total_power_mw += amps * 5.0 * 1000  # mW
+                        continue
+
+                if ext5v_voltage is not None:
+                    result["power_voltage"] = ext5v_voltage
+                    # Recalculate using actual input voltage
+                    total_current_a = total_power_mw / 1000 / 5.0  # back to amps
+                    result["power_current_a"] = round(total_current_a, 2)
+                    result["power_watts"] = round(
+                        ext5v_voltage * total_current_a, 1
+                    )
+        except FileNotFoundError:
+            pass  # vcgencmd not available (not a Pi)
+        except Exception:
+            pass
+
+        return result
 
     def _get_booth_settings(self) -> dict:
         """Read current booth settings for remote display."""

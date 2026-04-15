@@ -173,6 +173,11 @@ async def get_booth_info(
         "hostname": live.get("hostname", ""),
         "platform": live.get("platform", ""),
         "python": live.get("python", ""),
+        # Power / electricity
+        "power_voltage": live.get("power_voltage"),
+        "power_current_a": live.get("power_current_a"),
+        "power_watts": live.get("power_watts"),
+        "power_throttled": live.get("power_throttled"),
         "settings": live.get("settings", {}),
     }
 

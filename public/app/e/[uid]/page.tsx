@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, use } from "react";
 
 interface EventInfo {
   uid: string;
@@ -26,46 +26,43 @@ export default function EventPage({
 }: {
   params: Promise<{ uid: string }>;
 }) {
+  const { uid } = use(params);
   const [event, setEvent] = useState<EventInfo | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [uid, setUid] = useState("");
   const [lightbox, setLightbox] = useState<PhotoItem | null>(null);
 
   useEffect(() => {
-    params.then((p) => setUid(p.uid));
-  }, [params]);
-
-  useEffect(() => {
     if (!uid) return;
+
+    async function fetchEvent() {
+      try {
+        const res = await fetch(`/api/api/public/events/${uid}`);
+        if (res.status === 404) throw new Error("Event niet gevonden");
+        if (res.status === 410) throw new Error("Dit event is afgelopen");
+        if (!res.ok) throw new Error("Laden mislukt");
+        const eventData = await res.json();
+        setEvent(eventData);
+
+        // Fetch photos
+        const photosRes = await fetch(`/api/api/public/events/${uid}/photos`);
+        if (photosRes.ok) {
+          setPhotos(await photosRes.json());
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     fetchEvent();
   }, [uid]);
 
-  async function fetchEvent() {
-    try {
-      const res = await fetch(`/api/api/public/events/${uid}`);
-      if (res.status === 404) throw new Error("Event niet gevonden");
-      if (res.status === 410) throw new Error("Dit event is afgelopen");
-      if (!res.ok) throw new Error("Laden mislukt");
-      const eventData = await res.json();
-      setEvent(eventData);
-
-      // Fetch photos
-      const photosRes = await fetch(`/api/api/public/events/${uid}/photos`);
-      if (photosRes.ok) {
-        setPhotos(await photosRes.json());
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   // Auto-refresh photos every 15 seconds
   useEffect(() => {
-    if (!uid || error) return;
+    if (!uid || error || !event) return;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/api/public/events/${uid}/photos`);
@@ -73,7 +70,7 @@ export default function EventPage({
       } catch {}
     }, 15_000);
     return () => clearInterval(interval);
-  }, [uid, error]);
+  }, [uid, error, event]);
 
   const closeLightbox = useCallback(() => setLightbox(null), []);
 
@@ -92,6 +89,7 @@ export default function EventPage({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        background: "linear-gradient(135deg, #0f0f23, #1a1a2e)",
       }}>
         <div style={{
           width: 32,
@@ -101,7 +99,7 @@ export default function EventPage({
           borderRadius: "50%",
           animation: "spin 0.8s linear infinite",
         }} />
-        <style jsx>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </main>
     );
   }
@@ -115,11 +113,13 @@ export default function EventPage({
         justifyContent: "center",
         textAlign: "center",
         padding: "2rem",
+        background: "linear-gradient(135deg, #0f0f23, #1a1a2e)",
+        color: "white",
       }}>
         <div>
           <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>😔</div>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.5rem" }}>{error || "Event niet gevonden"}</h1>
-          <p style={{ color: "var(--text-muted)" }}>Controleer of je de juiste QR-code hebt gescand.</p>
+          <p style={{ color: "#999" }}>Controleer of je de juiste QR-code hebt gescand.</p>
         </div>
       </main>
     );
@@ -142,6 +142,7 @@ export default function EventPage({
         maxWidth: 960,
         margin: "0 auto",
         padding: "0 1rem 3rem",
+        color: "white",
       }}>
         {/* Header */}
         <header style={{
@@ -162,7 +163,7 @@ export default function EventPage({
           {event.description && (
             <p style={{
               fontSize: "1rem",
-              color: "var(--text-muted)",
+              color: "#999",
               maxWidth: 500,
               margin: "0 auto 1rem",
               lineHeight: 1.5,
@@ -177,17 +178,17 @@ export default function EventPage({
             flexWrap: "wrap",
           }}>
             {event.date && (
-              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>📅 {formatDate(event.date)}</span>
+              <span style={{ fontSize: "0.85rem", color: "#999" }}>📅 {formatDate(event.date)}</span>
             )}
             {event.location && (
-              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>📍 {event.location}</span>
+              <span style={{ fontSize: "0.85rem", color: "#999" }}>📍 {event.location}</span>
             )}
           </div>
           {photos.length > 0 && (
             <p style={{
               marginTop: "1rem",
               fontSize: "0.85rem",
-              color: "var(--text-muted)",
+              color: "#999",
             }}>
               {photos.length} foto{photos.length !== 1 ? "'s" : ""}
             </p>
@@ -200,30 +201,48 @@ export default function EventPage({
             <div style={{
               textAlign: "center",
               padding: "4rem 1rem",
-              background: "var(--bg-card)",
-              border: "1px dashed var(--border)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px dashed rgba(255,255,255,0.1)",
               borderRadius: 16,
             }}>
               <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🎉</div>
               <h2 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                 Welkom bij het event!
               </h2>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              <p style={{ color: "#999", fontSize: "0.9rem" }}>
                 Foto&apos;s verschijnen hier zodra ze worden gemaakt.
               </p>
             </div>
           ) : (
-            <div className="photo-grid">
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+              gap: "0.75rem",
+            }}>
               {photos.map((photo) => (
                 <div
                   key={photo.id}
-                  className="photo-card"
+                  style={{
+                    aspectRatio: "7/5",
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    background: "rgba(255,255,255,0.03)",
+                    transition: "transform 0.2s, border-color 0.2s",
+                  }}
                   onClick={() => setLightbox(photo)}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={`/api${photo.url}`}
                     alt={`Foto ${photo.seq}`}
                     loading="lazy"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
                   />
                 </div>
               ))}
@@ -234,7 +253,19 @@ export default function EventPage({
 
       {/* Lightbox */}
       {lightbox && (
-        <div className="lightbox" onClick={closeLightbox}>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.92)",
+            backdropFilter: "blur(20px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={closeLightbox}
+        >
           <button
             onClick={closeLightbox}
             style={{
@@ -255,19 +286,32 @@ export default function EventPage({
           >
             ✕
           </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api${lightbox.url}`}
             alt={`Foto ${lightbox.seq}`}
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "80vh",
+              borderRadius: 16,
+              objectFit: "contain",
+            }}
             onClick={(e) => e.stopPropagation()}
           />
           <a
             href={`/api${lightbox.url}`}
             download={`photo_${lightbox.seq}.jpg`}
-            className="btn btn-primary"
             style={{
               position: "absolute",
               bottom: "2rem",
               zIndex: 101,
+              background: "#8b5cf6",
+              color: "white",
+              padding: "0.75rem 1.5rem",
+              borderRadius: 12,
+              textDecoration: "none",
+              fontWeight: 600,
+              fontSize: "0.9rem",
             }}
             onClick={(e) => e.stopPropagation()}
           >
