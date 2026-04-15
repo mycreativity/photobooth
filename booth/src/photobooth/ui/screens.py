@@ -361,8 +361,10 @@ class LivePreviewLayer(FloatLayout):
         try:
             # Filter is already applied in the camera background thread
             core_img = CoreImage(io.BytesIO(frame_data), ext="jpg")
-            # Mirror the preview so it behaves like looking in a mirror
-            core_img.texture.flip_horizontal()
+            # Mirror the preview only for webcams (not DSLR)
+            # Webcam preview should look like a mirror; DSLR is already correct
+            if getattr(self._camera, 'name', '') == 'Webcam':
+                core_img.texture.flip_horizontal()
             self._preview_image.texture = core_img.texture
         except Exception:
             pass

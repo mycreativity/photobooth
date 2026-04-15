@@ -580,8 +580,8 @@ class GPhoto2CameraService:
     # ----- preview brightness boost -----------------------------------------
 
     # Pre-computed gamma lookup table for brightness boost.
-    # Gamma < 1.0 = brighter; 0.7 ≈ +1 stop of light.
-    _PREVIEW_GAMMA = 0.7
+    # Gamma < 1.0 = brighter; 0.45 ≈ +2 stops of light.
+    _PREVIEW_GAMMA = 0.45
     _GAMMA_LUT = None
 
     @classmethod
@@ -601,9 +601,8 @@ class GPhoto2CameraService:
 
             # Build LUT once
             if cls._GAMMA_LUT is None:
-                inv_gamma = 1.0 / cls._PREVIEW_GAMMA
                 cls._GAMMA_LUT = np.array([
-                    ((i / 255.0) ** inv_gamma) * 255
+                    ((i / 255.0) ** cls._PREVIEW_GAMMA) * 255
                     for i in range(256)
                 ], dtype=np.uint8)
 
