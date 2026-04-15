@@ -287,6 +287,10 @@ class GPhoto2CameraService:
                 file_data = camera_file.get_data_and_size()
                 jpeg_bytes = bytes(file_data)
 
+                # Boost preview brightness — the viewfinder feed is darker
+                # than the final capture because it doesn't include flash.
+                jpeg_bytes = self._boost_preview_brightness(jpeg_bytes)
+
                 # Apply filter if active
                 active_filter = self._preview_filter
                 if active_filter not in ("none", "classic", ""):
@@ -572,6 +576,47 @@ class GPhoto2CameraService:
             except Exception as e:
                 logger.warning("Brightness measurement failed: %s", e)
                 return 128.0  # Fallback — neutral
+
+    # ----- preview brightness boost -----------------------------------------
+
+    # Pre-computed gamma lookup table for brightness boost.
+    # Gamma < 1.0 = brighter; 0.7 ≈ +1 stop of light.
+    _PREVIEW_GAMMA = 0.7
+    _GAMMA_LUT = None
+
+    @classmethod
+    def _boost_preview_brightness(cls, jpeg_bytes: bytes) -> bytes:
+        """Brighten the preview frame using gamma correction.
+
+        The viewfinder feed from most DSLRs is darker than the actual
+        capture because it doesn't account for the LED flash. Applying
+        a gamma curve lifts the preview to better match the final result.
+        """
+        try:
+            import cv2
+            nparr = np.frombuffer(jpeg_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if frame is None:
+                return jpeg_bytes
+
+            # Build LUT once
+            if cls._GAMMA_LUT is None:
+                inv_gamma = 1.0 / cls._PREVIEW_GAMMA
+                cls._GAMMA_LUT = np.array([
+                    ((i / 255.0) ** inv_gamma) * 255
+                    for i in range(256)
+                ], dtype=np.uint8)
+
+            frame = cv2.LUT(frame, cls._GAMMA_LUT)
+
+            success, buffer = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85],
+            )
+            if success:
+                return bytes(buffer)
+        except Exception:
+            pass
+        return jpeg_bytes
 
     # ----- filter support --------------------------------------------------
 
