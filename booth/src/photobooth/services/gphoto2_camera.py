@@ -127,6 +127,7 @@ class GPhoto2CameraService:
         self._frame_queue: queue.Queue[bytes] = queue.Queue(maxsize=2)
         self._lock = threading.Lock()
         self._preview_filter: str = "classic"
+        self._capture_in_progress = False
 
     @property
     def is_previewing(self) -> bool:
@@ -282,6 +283,13 @@ class GPhoto2CameraService:
         interval = 1.0 / self._preview_fps
 
         while not self._stop_event.is_set():
+            # Pause preview during capture — the camera can only handle
+            # one USB operation at a time, so preview frames would cause
+            # contention and stuttering during shutter + download.
+            if self._capture_in_progress:
+                time.sleep(0.05)
+                continue
+
             start = time.monotonic()
 
             try:
@@ -446,39 +454,49 @@ class GPhoto2CameraService:
     def capture_photo(self) -> bytes:
         """Capture a full-resolution photo and return JPEG bytes.
 
-        The camera saves the image to its internal storage, then we
-        download it and return the raw bytes.
+        Pauses the preview loop during capture to avoid USB contention.
+        The camera can only handle one operation at a time — running
+        preview and capture simultaneously causes severe stuttering.
         """
         gp = _ensure_gphoto2()
 
-        with self._lock:
-            self._ensure_camera()
+        # Pause the preview loop so we get exclusive camera access
+        self._capture_in_progress = True
+        # Give the preview loop time to exit its current cycle
+        time.sleep(0.05)
 
-            # Capture — this triggers the shutter
-            file_path = self._camera.capture(gp.GP_CAPTURE_IMAGE)
-            logger.info(
-                "DSLR captured: %s/%s", file_path.folder, file_path.name,
-            )
+        try:
+            with self._lock:
+                self._ensure_camera()
 
-            # Download the file from the camera
-            camera_file = self._camera.file_get(
-                file_path.folder, file_path.name,
-                gp.GP_FILE_TYPE_NORMAL,
-            )
-            file_data = camera_file.get_data_and_size()
-            jpeg_bytes = bytes(file_data)
+                # Capture — this triggers the shutter
+                file_path = self._camera.capture(gp.GP_CAPTURE_IMAGE)
+                logger.info(
+                    "DSLR captured: %s/%s", file_path.folder, file_path.name,
+                )
 
-            # Delete from camera to save space
-            try:
-                self._camera.file_delete(file_path.folder, file_path.name)
-            except Exception:
-                pass  # Non-critical — camera card just fills up slowly
+                # Download the file from the camera
+                camera_file = self._camera.file_get(
+                    file_path.folder, file_path.name,
+                    gp.GP_FILE_TYPE_NORMAL,
+                )
+                file_data = camera_file.get_data_and_size()
+                jpeg_bytes = bytes(file_data)
 
-            logger.info(
-                "Photo downloaded: %d bytes", len(jpeg_bytes),
-            )
+                # Delete from camera to save space
+                try:
+                    self._camera.file_delete(file_path.folder, file_path.name)
+                except Exception:
+                    pass  # Non-critical — camera card just fills up slowly
 
-            return jpeg_bytes
+                logger.info(
+                    "Photo downloaded: %d bytes", len(jpeg_bytes),
+                )
+
+                return jpeg_bytes
+        finally:
+            # Always resume preview, even if capture fails
+            self._capture_in_progress = False
 
     # ----- camera settings -------------------------------------------------
 
