@@ -221,6 +221,11 @@ class GPhoto2CameraService:
         if self._previewing:
             return
 
+        # Disable autofocus during preview — prevents the camera from
+        # hunting when people approach the touchscreen to tap buttons.
+        # Focus is locked via a single AF pulse in prepare_for_capture().
+        self._disable_autofocus()
+
         self._stop_event.clear()
         self._previewing = True
 
@@ -319,7 +324,68 @@ class GPhoto2CameraService:
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
-    # ----- pre-capture preparation ------------------------------------------
+    # ----- autofocus management ----------------------------------------------
+
+    def _disable_autofocus(self) -> None:
+        """Set the camera to manual focus mode.
+
+        During preview, AF must be off — otherwise the camera hunts
+        every time a user walks up to the touchscreen, and when they
+        step back for the photo the lens takes a long time to re-lock.
+        """
+        gp = _ensure_gphoto2()
+        with self._lock:
+            try:
+                self._ensure_camera()
+                config = self._camera.get_config(self._context)
+                # Try the Canon "focusmode" widget (values: "One Shot", "Manual")
+                try:
+                    fm = config.get_child_by_name("focusmode")
+                    choices = [fm.get_choice(i) for i in range(fm.count_choices())]
+                    # Prefer "Manual", fall back to any MF-like option
+                    for mf_name in ("Manual", "MF", "manual"):
+                        if mf_name in choices:
+                            fm.set_value(mf_name)
+                            self._camera.set_config(config, self._context)
+                            logger.info("AF disabled (focusmode → %s)", mf_name)
+                            return
+                    logger.debug("No manual focus option found in: %s", choices)
+                except Exception as e:
+                    logger.debug("focusmode widget not available: %s", e)
+
+                # Fallback: cancel any active AF drive
+                try:
+                    af = config.get_child_by_name("cancelautofocus")
+                    af.set_value(1)
+                    self._camera.set_config(config, self._context)
+                    logger.info("AF cancelled via cancelautofocus")
+                except Exception:
+                    pass
+
+            except Exception as e:
+                logger.warning("Could not disable AF: %s", e)
+
+    def _enable_autofocus(self) -> None:
+        """Switch the camera to One Shot AF mode."""
+        gp = _ensure_gphoto2()
+        with self._lock:
+            try:
+                self._ensure_camera()
+                config = self._camera.get_config(self._context)
+                try:
+                    fm = config.get_child_by_name("focusmode")
+                    choices = [fm.get_choice(i) for i in range(fm.count_choices())]
+                    for af_name in ("One Shot", "AI Focus", "AF", "auto"):
+                        if af_name in choices:
+                            fm.set_value(af_name)
+                            self._camera.set_config(config, self._context)
+                            logger.info("AF enabled (focusmode → %s)", af_name)
+                            return
+                    logger.debug("No AF option found in: %s", choices)
+                except Exception as e:
+                    logger.debug("focusmode widget not available: %s", e)
+            except Exception as e:
+                logger.warning("Could not enable AF: %s", e)
 
     def trigger_autofocus(self) -> bool:
         """Trigger a single autofocus cycle on the camera.
@@ -341,15 +407,39 @@ class GPhoto2CameraService:
                 logger.warning("Autofocus trigger failed: %s", e)
                 return False
 
-    def prepare_for_capture(self) -> None:
-        """Trigger autofocus before capture.
+    # ----- pre-capture preparation ------------------------------------------
 
-        Call this at the start of the countdown so the lens locks
-        focus at the correct distance (users step back from the
-        touchscreen).  Exposure is handled by the camera's own
-        auto mode.
+    def prepare_for_capture(self) -> None:
+        """Smart AF: enable → focus → lock → disable.
+
+        Called at the start of the countdown. At this point the user
+        has stepped back from the touchscreen to their photo position.
+
+        Sequence:
+        1. Switch to One Shot AF mode
+        2. Trigger autofocus drive
+        3. Wait for lens to lock (~0.8s)
+        4. Switch back to Manual focus → lens stays at locked distance
+
+        This ensures sharp photos without AF hunting during preview.
         """
+        logger.info("Preparing for capture: AF cycle start")
+
+        # Step 1: Enable AF
+        self._enable_autofocus()
+
+        # Step 2: Trigger AF drive
         self.trigger_autofocus()
+
+        # Step 3: Wait for lens to lock focus
+        # Canon EOS 750D typically locks within 0.3–0.8s in good light
+        time.sleep(1.0)
+
+        # Step 4: Lock focus by switching back to Manual
+        # The lens stays at its current focus distance
+        self._disable_autofocus()
+
+        logger.info("AF cycle complete — focus locked")
 
     # ----- capture ---------------------------------------------------------
 
