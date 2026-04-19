@@ -1,0 +1,62 @@
+{
+  "canvas": {
+    "width": 1200,
+    "height": 1800
+  },
+  "photoRatio": 1.4,
+  "padding": 30,
+  "outputQuality": 95,
+
+  "branding": {
+    "heightPercent": 15,
+    "accentLine": {
+      "thickness": 3,
+      "offsetTop": 8
+    },
+    "colors": {
+      "background": "#1C2028",
+      "text": "#EDE8D0",
+      "accent": "#C29958"
+    },
+    "fonts": {
+      "titleSize": 36,
+      "titleBoldSize": 36,
+      "dateSize": 22,
+      "lineHeight": 42
+    },
+    "logo": {
+      "maxWidth": 300,
+      "maxHeight": 210,
+      "paddingInner": 10
+    }
+  },
+
+  "layouts": {
+    "single": {
+      "label": "Enkele foto",
+      "photosNeeded": 1,
+      "slots": [
+        { "x": 0, "y": 22.3, "w": 100, "h": 55.4 }
+      ]
+    },
+    "strip": {
+      "label": "Fotostrip",
+      "photosNeeded": 3,
+      "slots": [
+        { "x": 0, "y": 7.8, "w": 100, "h": 55.4 },
+        { "x": 0, "y": 65.2, "w": 48.7, "h": 26.9 },
+        { "x": 51.3, "y": 65.2, "w": 48.7, "h": 26.9 }
+      ]
+    },
+    "grid": {
+      "label": "Fotogrid",
+      "photosNeeded": 4,
+      "slots": [
+        { "x": 0, "y": 22.0, "w": 48.7, "h": 26.9 },
+        { "x": 51.3, "y": 22.0, "w": 48.7, "h": 26.9 },
+        { "x": 0, "y": 51.0, "w": 48.7, "h": 26.9 },
+        { "x": 51.3, "y": 51.0, "w": 48.7, "h": 26.9 }
+      ]
+    }
+  }
+}
