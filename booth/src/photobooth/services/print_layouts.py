@@ -62,8 +62,7 @@ def _load_layout_config() -> dict[str, Any]:
 # Hardcoded fallback (matches the original constants)
 _FALLBACK_CONFIG: dict[str, Any] = {
     "canvas": {"width": 1200, "height": 1800},
-    "photoRatio": 1.25,
-    "padding": 30,
+    "padding": 20,
     "outputQuality": 95,
     "branding": {
         "heightPercent": 15,
@@ -73,9 +72,10 @@ _FALLBACK_CONFIG: dict[str, Any] = {
         "logo": {"maxWidth": 300, "maxHeight": 210, "paddingInner": 10},
     },
     "layouts": {
-        "single": {"photosNeeded": 1, "slots": [{"x": 0, "y": 19.0, "w": 100, "h": 62.0}]},
+        "single": {"photosNeeded": 1, "photoRatio": 0.8, "slots": [{"x": 0, "y": 1.5, "w": 100, "h": 96.9}]},
         "strip": {
             "photosNeeded": 3,
+            "photoRatio": 1.25,
             "slots": [
                 {"x": 0, "y": 2.9, "w": 100, "h": 62.0},
                 {"x": 0, "y": 66.9, "w": 48.7, "h": 30.2},
@@ -84,6 +84,7 @@ _FALLBACK_CONFIG: dict[str, Any] = {
         },
         "grid": {
             "photosNeeded": 6,
+            "photoRatio": 1.25,
             "slots": [
                 {"x": 0, "y": 2.9, "w": 49.1, "h": 30.5},
                 {"x": 50.9, "y": 2.9, "w": 49.1, "h": 30.5},

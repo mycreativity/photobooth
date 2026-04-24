@@ -66,8 +66,7 @@ def _default_card_layout() -> dict[str, Any]:
     """Hardcoded fallback matching the original print_layouts.py constants."""
     return {
         "canvas": {"width": 1200, "height": 1800},
-        "photoRatio": 1.25,
-        "padding": 30,
+        "padding": 20,
         "outputQuality": 95,
         "branding": {
             "heightPercent": 15,
@@ -87,13 +86,15 @@ def _default_card_layout() -> dict[str, Any]:
         },
         "layouts": {
             "single": {
-                "label": "Enkele foto",
+                "label": "Portret",
                 "photosNeeded": 1,
-                "slots": [{"x": 0, "y": 19.0, "w": 100, "h": 62.0}],
+                "photoRatio": 0.8,
+                "slots": [{"x": 0, "y": 1.5, "w": 100, "h": 96.9}],
             },
             "strip": {
-                "label": "Fotostrip",
+                "label": "Collage",
                 "photosNeeded": 3,
+                "photoRatio": 1.25,
                 "slots": [
                     {"x": 0, "y": 2.9, "w": 100, "h": 62.0},
                     {"x": 0, "y": 66.9, "w": 48.7, "h": 30.2},
@@ -101,8 +102,9 @@ def _default_card_layout() -> dict[str, Any]:
                 ],
             },
             "grid": {
-                "label": "Fotogrid",
+                "label": "Mozaïek",
                 "photosNeeded": 6,
+                "photoRatio": 1.25,
                 "slots": [
                     {"x": 0, "y": 2.9, "w": 49.1, "h": 30.5},
                     {"x": 50.9, "y": 2.9, "w": 49.1, "h": 30.5},

@@ -225,7 +225,7 @@ LAYOUT_GRID = "grid"
 LAYOUT_PHOTO_COUNT = {
     LAYOUT_SINGLE: 1,
     LAYOUT_STRIP: 3,
-    LAYOUT_GRID: 4,
+    LAYOUT_GRID: 6,
 }
 
 # Filter presets
@@ -612,6 +612,17 @@ class SessionState:
 # Singleton session state — shared across all screens
 _session = SessionState()
 
+
+def _get_layout_ratio(layout: str = "") -> float:
+    """Get the photo ratio for the given layout from shared config.
+
+    Each layout can define its own photoRatio (e.g. single=4:5 portrait,
+    strip/grid=5:4 landscape). Falls back to 1.25 if not found.
+    """
+    from photobooth.services.print_layouts import _CFG
+    layout = layout or _session.layout
+    layout_cfg = _CFG.get("layouts", {}).get(layout, {})
+    return layout_cfg.get("photoRatio", 1.25)
 
 # ---------------------------------------------------------------------------
 # Reusable UI: Big touchable card
@@ -1594,9 +1605,9 @@ class CountdownScreen(BaseBoothScreen):
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
 
-        # Show 7:5 crop guide on the camera preview
+        # Show crop guide on the camera preview (ratio depends on layout)
         if self.preview_layer:
-            ratio = self.config.print_layout.photo_ratio if self.config else 1.4
+            ratio = _get_layout_ratio()
             self.preview_layer.show_crop_guide(
                 ratio=ratio,
                 accent_color=self.theme.colors.accent,
@@ -1804,10 +1815,10 @@ class CaptureScreen(BaseBoothScreen):
             jpeg_data = self.camera.capture_photo() if self.camera else b""
             retake_idx = _session.retake_target
 
-            # Center-crop to 7:5 print ratio
+            # Center-crop to layout-specific ratio (e.g. 4:5 for single, 5:4 for strip/grid)
             if jpeg_data:
                 from photobooth.services.print_layouts import crop_to_ratio
-                ratio = self.config.print_layout.photo_ratio if self.config else 1.4
+                ratio = _get_layout_ratio()
                 jpeg_data = crop_to_ratio(jpeg_data, ratio)
 
             # Keep unfiltered original for undo/rebuild pipeline
@@ -2069,9 +2080,9 @@ class ReviewScreen(BaseBoothScreen):
     def _build_thumbnails(self) -> None:
         """Build photo thumbnails with layout-aware arrangement.
 
-        - 1 photo: large, centered
+        - 1 photo: large centered (portrait for single layout)
         - 3 photos: horizontal row
-        - 4 photos: 2×2 grid (maximizes space on small screens)
+        - 6 photos: 2×3 grid
         """
         from PIL import Image as PILImage
 
@@ -2083,14 +2094,20 @@ class ReviewScreen(BaseBoothScreen):
         if count == 0:
             return
 
+        # Get layout ratio for proper aspect display
+        ratio = _get_layout_ratio()
+        is_portrait = ratio < 1.0
+
         # Calculate grid positions based on photo count
-        if count == 4:
-            # 2×2 grid — best use of space for 4 photos
+        if count == 6:
+            # 2×3 grid — 2 columns, 3 rows
             positions = [
-                (0.28, 0.72, 0.44, 0.50),  # top-left     (cx, cy, w, h)
-                (0.72, 0.72, 0.44, 0.50),  # top-right
-                (0.28, 0.27, 0.44, 0.50),  # bottom-left
-                (0.72, 0.27, 0.44, 0.50),  # bottom-right
+                (0.28, 0.82, 0.44, 0.30),  # row 1 left
+                (0.72, 0.82, 0.44, 0.30),  # row 1 right
+                (0.28, 0.50, 0.44, 0.30),  # row 2 left
+                (0.72, 0.50, 0.44, 0.30),  # row 2 right
+                (0.28, 0.18, 0.44, 0.30),  # row 3 left
+                (0.72, 0.18, 0.44, 0.30),  # row 3 right
             ]
         elif count == 3:
             # 3 in a row
@@ -2100,10 +2117,11 @@ class ReviewScreen(BaseBoothScreen):
                 (0.82, 0.5, 0.30, 0.92),
             ]
         else:
-            # 1 photo — large centered
-            positions = [
-                (0.5, 0.5, 0.55, 0.96),
-            ]
+            # 1 photo — portrait or landscape based on ratio
+            if is_portrait:
+                positions = [(0.5, 0.5, 0.42, 0.96)]
+            else:
+                positions = [(0.5, 0.5, 0.55, 0.96)]
 
         for idx, photo_data in enumerate(photos):
             if idx >= len(positions):

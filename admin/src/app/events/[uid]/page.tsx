@@ -50,23 +50,24 @@ const PUBLIC_BASE = "https://booth.mycreativity.nl/e";
 
 const CARD = {
   canvas: { width: 1200, height: 1800 },
-  photoRatio: 1.25,
-  padding: 30, // px at print resolution
+  padding: 20, // px at print resolution
   branding: {
     heightPercent: 15,
     accentLine: { thickness: 3, offsetTop: 8 },
     colors: { background: "#1C2028", text: "#EDE8D0", accent: "#FFFFFF" },
-    fonts: { titleSize: 36, dateSize: 22, lineHeight: 42 },
+    fonts: { titleSize: 36, dateSize: 26, lineHeight: 42 },
   },
   layouts: {
     single: {
-      label: "Enkele foto",
+      label: "Portret",
       photosNeeded: 1,
-      slots: [{ x: 0, y: 19.0, w: 100, h: 62.0 }],
+      photoRatio: 0.8,
+      slots: [{ x: 0, y: 1.5, w: 100, h: 96.9 }],
     },
     strip: {
-      label: "Fotostrip",
+      label: "Collage",
       photosNeeded: 3,
+      photoRatio: 1.25,
       slots: [
         { x: 0, y: 2.9, w: 100, h: 62.0 },
         { x: 0, y: 66.9, w: 48.7, h: 30.2 },
@@ -74,8 +75,9 @@ const CARD = {
       ],
     },
     grid: {
-      label: "Fotogrid",
+      label: "Mozaïek",
       photosNeeded: 6,
+      photoRatio: 1.25,
       slots: [
         { x: 0, y: 2.9, w: 49.1, h: 30.5 },
         { x: 50.9, y: 2.9, w: 49.1, h: 30.5 },
