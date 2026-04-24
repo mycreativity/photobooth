@@ -728,7 +728,7 @@ export default function EventDetailPage() {
                       backgroundColor: CARD.branding.colors.accent,
                     }}
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       <div
                         className="text-[8px] leading-tight line-clamp-2"
@@ -737,19 +737,19 @@ export default function EventDetailPage() {
                           __html: renderSimpleMarkdown(brandingText),
                         }}
                       />
-                      {displayDate && (
-                        <div
-                          className="text-[5px] leading-tight whitespace-nowrap mt-0.5"
-                          style={{ color: CARD.branding.colors.text, opacity: 0.7 }}
-                        >
-                          {displayDate}
-                        </div>
-                      )}
                     </div>
                     <div className="w-7 h-7 bg-white/20 rounded-md flex items-center justify-center shrink-0">
                       <span className="text-[8px]" style={{ color: CARD.branding.colors.text }}>LOGO</span>
                     </div>
                   </div>
+                  {displayDate && (
+                    <div
+                      className="text-[6px] leading-tight whitespace-nowrap absolute bottom-1.5 left-3"
+                      style={{ color: CARD.branding.colors.text, opacity: 0.7 }}
+                    >
+                      {displayDate}
+                    </div>
+                  )}
                 </div>
               </div>
               <p className="text-[10px] text-gray-500 mt-2 text-center">

@@ -69,7 +69,7 @@ _FALLBACK_CONFIG: dict[str, Any] = {
         "heightPercent": 15,
         "accentLine": {"thickness": 3, "offsetTop": 8},
         "colors": {"background": "#1C2028", "text": "#EDE8D0", "accent": "#FFFFFF"},
-        "fonts": {"titleSize": 36, "titleBoldSize": 36, "dateSize": 22, "lineHeight": 42},
+        "fonts": {"titleSize": 36, "titleBoldSize": 36, "dateSize": 26, "lineHeight": 42},
         "logo": {"maxWidth": 300, "maxHeight": 210, "paddingInner": 10},
     },
     "layouts": {
@@ -436,9 +436,12 @@ def _draw_branding_bar(
             fill=bar_text_color,
         )
 
-    # Date (left side, below text)
+    # Date (left side, bottom-aligned)
     date_str = display_date or datetime.now().strftime("%d-%m-%Y")
-    date_y = content_y_center + 16
+    bbox = draw.textbbox((0, 0), date_str, font=date_font)
+    date_h = bbox[3] - bbox[1]
+    bar_bottom = PRINT_HEIGHT - 20  # 20px from bottom edge
+    date_y = bar_bottom - date_h
     draw.text(
         (text_x_start, date_y),
         date_str,

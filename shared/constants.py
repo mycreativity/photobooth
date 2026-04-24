@@ -80,7 +80,7 @@ def _default_card_layout() -> dict[str, Any]:
             "fonts": {
                 "titleSize": 36,
                 "titleBoldSize": 36,
-                "dateSize": 22,
+                "dateSize": 26,
                 "lineHeight": 42,
             },
             "logo": {"maxWidth": 300, "maxHeight": 210, "paddingInner": 10},
