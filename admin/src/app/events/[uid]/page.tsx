@@ -62,7 +62,7 @@ const CARD = {
       label: "Portret",
       photosNeeded: 1,
       photoRatio: 0.8,
-      slots: [{ x: 0, y: 1.5, w: 100, h: 96.9 }],
+      slots: [{ x: 0, y: 6.0, w: 100, h: 88.0 }],
     },
     strip: {
       label: "Collage",

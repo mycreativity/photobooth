@@ -72,7 +72,7 @@ _FALLBACK_CONFIG: dict[str, Any] = {
         "logo": {"maxWidth": 300, "maxHeight": 210, "paddingInner": 10},
     },
     "layouts": {
-        "single": {"photosNeeded": 1, "photoRatio": 0.8, "slots": [{"x": 0, "y": 1.5, "w": 100, "h": 96.9}]},
+        "single": {"photosNeeded": 1, "photoRatio": 0.8, "slots": [{"x": 0, "y": 6.0, "w": 100, "h": 88.0}]},
         "strip": {
             "photosNeeded": 3,
             "photoRatio": 1.25,
