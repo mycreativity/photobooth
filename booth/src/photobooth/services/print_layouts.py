@@ -68,7 +68,7 @@ _FALLBACK_CONFIG: dict[str, Any] = {
     "branding": {
         "heightPercent": 15,
         "accentLine": {"thickness": 3, "offsetTop": 8},
-        "colors": {"background": "#1C2028", "text": "#EDE8D0", "accent": "#C29958"},
+        "colors": {"background": "#1C2028", "text": "#EDE8D0", "accent": "#FFFFFF"},
         "fonts": {"titleSize": 36, "titleBoldSize": 36, "dateSize": 22, "lineHeight": 42},
         "logo": {"maxWidth": 300, "maxHeight": 210, "paddingInner": 10},
     },
@@ -393,8 +393,10 @@ def _draw_branding_bar(
 
     content_y_center = bar_y + BRANDING_HEIGHT // 2
 
-    # Logo (left side)
-    logo_right_edge = PADDING
+    # Layout: [Text + Date (left)] ... [Logo (right)]
+
+    # Logo (right side)
+    logo_left_edge = PRINT_WIDTH - PADDING
     if logo_path:
         try:
             logo_path_obj = Path(logo_path)
@@ -410,38 +412,35 @@ def _draw_branding_bar(
                 # Auto-invert if the logo is dark on a dark background
                 logo = _auto_invert_logo(logo)
 
-                logo_x = PADDING + _LOGO["paddingInner"]
+                logo_x = PRINT_WIDTH - PADDING - _LOGO["paddingInner"] - logo.width
                 logo_y = content_y_center - logo.height // 2
                 canvas.paste(logo, (logo_x, logo_y), logo)
-                logo_right_edge = logo_x + logo.width + 20
+                logo_left_edge = logo_x - 20
         except Exception as e:
             logger.warning("Failed to load logo: %s", e)
 
-    # Text area (center)
+    # Text area (left side)
     text_to_render = branding_text or event_name
-    if text_to_render:
-        text_area_left = max(logo_right_edge, PRINT_WIDTH // 4)
-        text_area_right = PRINT_WIDTH - PADDING - 200  # Reserve space for date
-        text_center_x = (text_area_left + text_area_right) // 2
+    text_x_start = PADDING + 10
 
-        # Parse simple markdown and render
+    if text_to_render:
+        text_area_right = min(logo_left_edge, PRINT_WIDTH * 3 // 4)
+
+        # Render left-aligned markdown text
         _draw_markdown_text(
             draw, text_to_render,
-            x_center=text_center_x,
+            x_left=text_x_start,
             y=content_y_center - 20,
             regular_font=title_font,
             bold_font=title_bold_font,
             fill=bar_text_color,
         )
 
-    # Date (right side)
+    # Date (left side, below text)
     date_str = display_date or datetime.now().strftime("%d-%m-%Y")
-    bbox = draw.textbbox((0, 0), date_str, font=date_font)
-    date_w = bbox[2] - bbox[0]
-    date_x = PRINT_WIDTH - PADDING - date_w - 10
-    date_y = content_y_center - 10
+    date_y = content_y_center + 16
     draw.text(
-        (date_x, date_y),
+        (text_x_start, date_y),
         date_str,
         fill=bar_text_color,
         font=date_font,
@@ -455,13 +454,13 @@ def _draw_branding_bar(
 def _draw_markdown_text(
     draw: ImageDraw.ImageDraw,
     text: str,
-    x_center: int,
+    x_left: int,
     y: int,
     regular_font,
     bold_font,
     fill: str,
 ) -> None:
-    """Render simple markdown (bold/italic) as PIL text.
+    """Render simple markdown (bold/italic) as PIL text, left-aligned.
 
     Supports **bold** and *italic* (rendered as bold for simplicity
     since italic requires a separate font file).
@@ -479,15 +478,8 @@ def _draw_markdown_text(
         # Parse the line into segments: bold (**text**) and regular
         segments = _parse_markdown_line(line)
 
-        # Calculate total width for centering
-        total_w = 0
-        for seg_text, is_bold in segments:
-            font = bold_font if is_bold else regular_font
-            bbox = draw.textbbox((0, 0), seg_text, font=font)
-            total_w += bbox[2] - bbox[0]
-
-        # Draw centered
-        cursor_x = x_center - total_w // 2
+        # Draw left-aligned
+        cursor_x = x_left
         for seg_text, is_bold in segments:
             font = bold_font if is_bold else regular_font
             draw.text((cursor_x, line_y), seg_text, fill=fill, font=font)

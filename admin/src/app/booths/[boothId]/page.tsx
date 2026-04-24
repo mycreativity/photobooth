@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, getAccessToken, clearTokens, isLoggedIn } from "@/lib/auth";
+import PageHeader from "@/app/components/PageHeader";
 
 interface BoothInfo {
   id: string;
@@ -183,7 +184,7 @@ export default function BoothDetailPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
       </div>
     );
@@ -191,11 +192,9 @@ export default function BoothDetailPage({
 
   if (error || !booth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">{error || "Booth not found"}</p>
-          <button onClick={() => router.push("/")} className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition">← Terug</button>
-        </div>
+      <div className="text-center py-20">
+        <p className="text-red-400 mb-4">{error || "Booth not found"}</p>
+        <button onClick={() => router.push("/")} className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition">← Terug</button>
       </div>
     );
   }
@@ -204,44 +203,33 @@ export default function BoothDetailPage({
   const settings = booth.settings || {};
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-      {/* Header */}
-      <header className="border-b border-gray-800/50 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push("/")} className="text-gray-400 hover:text-white transition mr-2">←</button>
-            <span className="text-2xl">📸</span>
-            <div>
-              <h1 className="text-xl font-bold text-white">{booth.name || booth.booth_id}</h1>
-              <p className="text-xs text-gray-500 font-mono">{booth.booth_id}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg border border-gray-700/30 transition" title="Refresh">↻</button>
+    <div className="space-y-6">
+      <PageHeader
+        title={booth.name || booth.booth_id}
+        subtitle={booth.booth_id}
+        backHref="/"
+        badge={
+          <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" : "bg-gray-600"}`} />
             <span className="text-sm text-gray-300">{isOnline ? "Online" : "Offline"}</span>
           </div>
-        </div>
-      </header>
+        }
+        actions={
+          <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg border border-gray-700/30 transition" title="Refresh">↻</button>
+        }
+      />
 
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-
-        {/* Top stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      {/* Top stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <MetricCard label="CPU" value={`${booth.cpu_percent ?? 0}%`} sub={<ProgressBar percent={booth.cpu_percent ?? 0} />} />
           <MetricCard label="Temperatuur" value={booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} color={booth.cpu_temp && booth.cpu_temp > 70 ? "red" : booth.cpu_temp && booth.cpu_temp > 55 ? "amber" : "emerald"} />
           <MetricCard label="Geheugen" value={`${booth.mem_used_mb} / ${booth.mem_total_mb} MB`} sub={<ProgressBar percent={booth.mem_percent} color="violet" />} />
           <MetricCard label="Schijf" value={`${booth.disk_used_gb} / ${booth.disk_total_gb} GB`} sub={<ProgressBar percent={booth.disk_percent} color="emerald" />} />
-          <MetricCard label="Uptime" value={formatUptime(booth.uptime_seconds)} />
-          <MetricCard
-            label="Vermogen"
-            value={booth.power_watts != null ? `${booth.power_watts}W` : "—"}
-            color={booth.power_watts != null && booth.power_watts > 12 ? "amber" : "emerald"}
-          />
-        </div>
+        <MetricCard label="Uptime" value={formatUptime(booth.uptime_seconds)} />
+      </div>
 
-        {/* Main content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Device info */}
           <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
@@ -284,9 +272,6 @@ export default function BoothDetailPage({
           <SettingsPanel settings={settings} boothId={boothId} isOnline={isOnline} onSaved={fetchBooth} />
         </div>
 
-        {/* Electricity usage — full width */}
-        <PowerPanel booth={booth} />
-
         {/* Log panel — full width */}
         <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-3">
@@ -315,7 +300,6 @@ export default function BoothDetailPage({
             <div ref={logEndRef} />
           </div>
         </div>
-      </main>
     </div>
   );
 }
@@ -355,124 +339,7 @@ function LogLevel({ level }: { level: string }) {
   );
 }
 
-function PowerPanel({ booth }: { booth: BoothInfo }) {
-  const hasData = booth.power_voltage != null || booth.power_watts != null || booth.power_throttled != null;
-  const throttled = booth.power_throttled || null;
-  const isThrottleOk = !throttled || throttled === "ok";
 
-  // Parse throttle flags for display
-  const throttleLabels: Record<string, { label: string; severity: "warn" | "error" | "info" }> = {
-    undervoltage: { label: "Onderspanning", severity: "error" },
-    freq_capped: { label: "Freq. beperkt", severity: "warn" },
-    throttled: { label: "Throttled", severity: "error" },
-    temp_limit: { label: "Temp. limiet", severity: "warn" },
-    was_undervoltage: { label: "Was onderspanning", severity: "info" },
-    was_freq_capped: { label: "Was freq. beperkt", severity: "info" },
-    was_throttled: { label: "Was throttled", severity: "info" },
-    was_temp_limit: { label: "Was temp. limiet", severity: "info" },
-  };
-
-  const activeFlags = throttled ? throttled.split(",").filter(f => f !== "ok" && f.trim()) : [];
-
-  // Estimate daily kWh (very rough: current wattage × 24h)
-  const estimatedDailyKwh = booth.power_watts != null ? (booth.power_watts * 24 / 1000).toFixed(2) : null;
-
-  return (
-    <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">⚡ Stroomverbruik</h2>
-        {!hasData && (
-          <span className="text-xs text-gray-500">Wachten op data...</span>
-        )}
-      </div>
-
-      {hasData ? (
-        <div className="space-y-4">
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-gray-900/40 rounded-xl p-3 border border-gray-700/20">
-              <p className="text-xs text-gray-500 mb-0.5">Spanning</p>
-              <p className="text-lg font-semibold text-amber-300">
-                {booth.power_voltage != null ? `${booth.power_voltage}V` : "—"}
-              </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">
-                {booth.power_voltage != null && booth.power_voltage < 4.8
-                  ? "⚠️ Laag"
-                  : booth.power_voltage != null
-                  ? "✓ Normaal"
-                  : ""}
-              </p>
-            </div>
-            <div className="bg-gray-900/40 rounded-xl p-3 border border-gray-700/20">
-              <p className="text-xs text-gray-500 mb-0.5">Stroom</p>
-              <p className="text-lg font-semibold text-blue-300">
-                {booth.power_current_a != null ? `${booth.power_current_a}A` : "—"}
-              </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">
-                {booth.power_current_a != null
-                  ? `${(booth.power_current_a * 1000).toFixed(0)} mA`
-                  : ""}
-              </p>
-            </div>
-            <div className="bg-gray-900/40 rounded-xl p-3 border border-gray-700/20">
-              <p className="text-xs text-gray-500 mb-0.5">Vermogen</p>
-              <p className={`text-lg font-semibold ${booth.power_watts != null && booth.power_watts > 12 ? "text-amber-400" : "text-emerald-400"}`}>
-                {booth.power_watts != null ? `${booth.power_watts}W` : "—"}
-              </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">
-                {estimatedDailyKwh ? `~${estimatedDailyKwh} kWh/dag` : ""}
-              </p>
-            </div>
-            <div className="bg-gray-900/40 rounded-xl p-3 border border-gray-700/20">
-              <p className="text-xs text-gray-500 mb-0.5">Status</p>
-              <p className={`text-lg font-semibold ${isThrottleOk ? "text-emerald-400" : "text-red-400"}`}>
-                {isThrottleOk ? "✓ OK" : "⚠ Alert"}
-              </p>
-              <p className="text-[10px] text-gray-600 mt-0.5">Throttle status</p>
-            </div>
-          </div>
-
-          {/* Throttle warnings */}
-          {activeFlags.length > 0 && (
-            <div className="space-y-1.5">
-              {activeFlags.map((flag) => {
-                const info = throttleLabels[flag] || { label: flag, severity: "info" };
-                const colors = {
-                  error: "bg-red-500/10 border-red-500/20 text-red-400",
-                  warn: "bg-amber-500/10 border-amber-500/20 text-amber-400",
-                  info: "bg-gray-700/20 border-gray-600/20 text-gray-400",
-                };
-                const icons = { error: "🔴", warn: "🟡", info: "🔵" };
-                return (
-                  <div
-                    key={flag}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${colors[info.severity]}`}
-                  >
-                    <span>{icons[info.severity]}</span>
-                    <span className="font-medium">{info.label}</span>
-                    {flag.startsWith("was_") && (
-                      <span className="text-gray-500 ml-auto">historisch</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Power info note */}
-          <p className="text-[10px] text-gray-600 leading-relaxed">
-            💡 Vermogensmeting via PMIC-rails (Raspberry Pi 5). Perifere apparaten (USB, HAT) worden niet meegeteld.
-            Werkelijk verbruik aan het stopcontact is hoger door adapter-verliezen.
-          </p>
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500">
-          Geen stroomgegevens beschikbaar. Vereist Raspberry Pi 5 met PMIC of vcgencmd.
-        </p>
-      )}
-    </div>
-  );
-}
 
 function SettingsPanel({
   settings,

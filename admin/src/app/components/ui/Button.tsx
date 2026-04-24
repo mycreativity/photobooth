@@ -1,0 +1,67 @@
+import { type ReactNode, type ButtonHTMLAttributes } from "react";
+import { Loader2 } from "lucide-react";
+
+type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Size = "sm" | "md";
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: Variant;
+  size?: Size;
+  loading?: boolean;
+  icon?: ReactNode;
+  iconRight?: ReactNode;
+  children: ReactNode;
+}
+
+const variantStyles: Record<Variant, string> = {
+  primary:
+    "bg-violet-600 hover:bg-violet-500 text-white shadow-sm",
+  secondary:
+    "bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700/50",
+  danger:
+    "bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20",
+  ghost:
+    "bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-gray-200",
+};
+
+const sizeStyles: Record<Size, string> = {
+  sm: "px-3 py-1.5 text-xs gap-1.5",
+  md: "px-4 py-2 text-sm gap-2",
+};
+
+export default function Button({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  icon,
+  iconRight,
+  children,
+  disabled,
+  className = "",
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      disabled={disabled || loading}
+      className={`
+        inline-flex items-center justify-center font-medium rounded-lg
+        transition-all duration-150 cursor-pointer
+        disabled:opacity-50 disabled:cursor-not-allowed
+        ${variantStyles[variant]}
+        ${sizeStyles[size]}
+        ${className}
+      `}
+      {...props}
+    >
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : icon ? (
+        <span className="shrink-0 [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
+      ) : null}
+      {children}
+      {iconRight && !loading && (
+        <span className="shrink-0 [&>svg]:w-4 [&>svg]:h-4">{iconRight}</span>
+      )}
+    </button>
+  );
+}

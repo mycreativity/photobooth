@@ -37,7 +37,9 @@ class EventCreate(BaseModel):
     name: str
     description: str | None = None
     date: datetime | None = None
-    location: str | None = None
+    end_date: datetime | None = None
+    branding_text: str | None = None
+    display_date: str | None = None
 
 
 class EventUpdate(BaseModel):
@@ -45,8 +47,10 @@ class EventUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     date: datetime | None = None
-    location: str | None = None
+    end_date: datetime | None = None
     is_active: bool | None = None
+    branding_text: str | None = None
+    display_date: str | None = None
 
 
 class EventOut(BaseModel):
@@ -56,8 +60,11 @@ class EventOut(BaseModel):
     name: str
     description: str | None
     date: datetime | None
-    location: str | None
+    end_date: datetime | None = None
     is_active: bool
+    background_image: str | None = None
+    branding_text: str | None = None
+    display_date: str | None = None
     created_at: datetime
     updated_at: datetime | None
 

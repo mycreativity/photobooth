@@ -169,6 +169,8 @@ class BoothAgent:
                             logger.info("Server event: id=%s uid=%s", self.server_event_id, self.server_event_uid)
                     elif msg_type == "update_settings":
                         self._handle_update_settings(msg.get("settings", {}))
+                    elif msg_type == "push_event":
+                        asyncio.create_task(self._handle_push_event(msg.get("event", {})))
                     elif msg_type == "restart":
                         self._handle_restart()
                     elif msg_type in self._command_handlers:
@@ -305,6 +307,70 @@ class BoothAgent:
         # Give a moment for the log to be sent
         time.sleep(0.5)
         os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
+
+    async def _handle_push_event(self, event_data: dict) -> None:
+        """Handle push_event from server: download background & cache config.
+
+        The event card configuration is stored as a local JSON file
+        so the booth can render photo cards without further API calls.
+        """
+        if not event_data:
+            logger.warning("push_event received with empty data")
+            return
+
+        logger.info(
+            "Received event card config: %s (bg=%s)",
+            event_data.get("event_name", "?"),
+            event_data.get("background_image", "none"),
+        )
+
+        # Determine data directory
+        data_dir = Path("/opt/photobooth/data")
+        if not data_dir.exists():
+            data_dir = Path("data")
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download background image if URL provided
+        bg_url = event_data.get("background_url")
+        local_bg_path = None
+        if bg_url:
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(bg_url) as resp:
+                        if resp.status == 200:
+                            bg_data = await resp.read()
+                            # Use a fixed filename (overwritten each push)
+                            local_bg_path = str(data_dir / "event_background.png")
+                            Path(local_bg_path).write_bytes(bg_data)
+                            logger.info(
+                                "Background downloaded: %s (%d bytes)",
+                                local_bg_path, len(bg_data),
+                            )
+                        else:
+                            logger.warning("Background download failed: HTTP %d", resp.status)
+            except Exception as e:
+                logger.error("Failed to download background: %s", e)
+
+        # Store event card config as JSON
+        card_config = {
+            "event_uid": event_data.get("event_uid", ""),
+            "event_name": event_data.get("event_name", ""),
+            "display_date": event_data.get("display_date", ""),
+            "branding_text": event_data.get("branding_text", ""),
+            "background_image_path": local_bg_path,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        config_path = data_dir / "event_card.json"
+        config_path.write_text(json.dumps(card_config, indent=2))
+        logger.info("Event card config saved to %s", config_path)
+
+        # Notify registered handler (e.g. to update print settings)
+        if "push_event" in self._command_handlers:
+            try:
+                self._command_handlers["push_event"](card_config)
+            except Exception as e:
+                logger.error("push_event callback error: %s", e)
 
     async def _upload_photo(
         self,

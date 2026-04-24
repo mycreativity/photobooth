@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
+import { useSidebar } from "./AppShell";
+import { Camera, CalendarDays, ChevronsLeft, LogOut } from "lucide-react";
 
 interface UserInfo {
   email: string;
@@ -11,8 +13,8 @@ interface UserInfo {
 }
 
 const NAV_ITEMS = [
-  { href: "/", label: "Booths", icon: "📸" },
-  { href: "/events", label: "Events", icon: "🎉" },
+  { href: "/", label: "Booths", icon: Camera },
+  { href: "/events", label: "Events", icon: CalendarDays },
 ];
 
 function getInitials(email: string, name: string | null): string {
@@ -31,7 +33,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed } = useSidebar();
 
   useEffect(() => {
     if (!isLoggedIn()) return;
@@ -62,7 +64,7 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-gray-800/50">
         <div className="w-9 h-9 rounded-xl bg-violet-600/20 flex items-center justify-center shrink-0">
-          <span className="text-lg">📸</span>
+          <Camera className="w-4.5 h-4.5 text-violet-400" />
         </div>
         {!collapsed && (
           <div className="min-w-0">
@@ -74,26 +76,16 @@ export default function Sidebar() {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`ml-auto p-1 text-gray-500 hover:text-white rounded transition ${
+          className={`ml-auto p-1.5 text-gray-500 hover:text-white hover:bg-gray-800/50 rounded-lg transition ${
             collapsed ? "mx-auto ml-0" : ""
           }`}
           title={collapsed ? "Uitklappen" : "Inklappen"}
         >
-          <svg
+          <ChevronsLeft
             className={`w-4 h-4 transition-transform ${
               collapsed ? "rotate-180" : ""
             }`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-            />
-          </svg>
+          />
         </button>
       </div>
 
@@ -101,18 +93,19 @@ export default function Sidebar() {
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
+          const Icon = item.icon;
           return (
             <a
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
                 active
                   ? "bg-violet-600/15 text-violet-300 border border-violet-500/20"
                   : "text-gray-400 hover:text-white hover:bg-gray-800/50 border border-transparent"
               }`}
               title={collapsed ? item.label : undefined}
             >
-              <span className="text-base shrink-0">{item.icon}</span>
+              <Icon className="w-[18px] h-[18px] shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </a>
           );
@@ -154,19 +147,7 @@ export default function Sidebar() {
                 className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition shrink-0"
                 title="Uitloggen"
               >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
+                <LogOut className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -182,19 +163,7 @@ export default function Sidebar() {
             className="w-full mt-2 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition flex items-center justify-center"
             title="Uitloggen"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
+            <LogOut className="w-4 h-4" />
           </button>
         )}
       </div>

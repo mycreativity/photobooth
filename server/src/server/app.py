@@ -28,6 +28,8 @@ async def lifespan(app: FastAPI):
         # Lightweight migration: add new columns to existing tables
         # SQLAlchemy's create_all won't add columns to existing tables
         import sqlalchemy as sa
+
+        # Booth columns
         for col_name, col_def in [
             ("api_key_hash", "VARCHAR(64)"),
             ("event_id", "VARCHAR(36)"),
@@ -37,6 +39,21 @@ async def lifespan(app: FastAPI):
                     f"ALTER TABLE booths ADD COLUMN {col_name} {col_def}"
                 ))
                 logger.info("Added column booths.%s", col_name)
+            except Exception:
+                pass  # Column already exists
+
+        # Event photo card columns
+        for col_name, col_def in [
+            ("background_image", "VARCHAR(500)"),
+            ("branding_text", "TEXT"),
+            ("display_date", "VARCHAR(100)"),
+            ("end_date", "DATETIME"),
+        ]:
+            try:
+                await conn.execute(sa.text(
+                    f"ALTER TABLE events ADD COLUMN {col_name} {col_def}"
+                ))
+                logger.info("Added column events.%s", col_name)
             except Exception:
                 pass  # Column already exists
 

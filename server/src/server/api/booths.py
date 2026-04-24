@@ -249,3 +249,69 @@ async def delete_booth(
     await db.delete(booth)
     await db.commit()
     return {"message": f"Booth {booth_id} deleted"}
+
+
+@router.post("/{booth_id}/push-event")
+async def push_event_to_booth(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Push event card configuration to a connected booth.
+
+    Reads the booth's assigned event, collects all card settings
+    (background, branding text, date), and sends them to the booth
+    via WebSocket. The booth downloads the background image once
+    and caches it locally.
+    """
+    if not hub.is_booth_connected(booth_id):
+        raise HTTPException(status_code=503, detail="Booth is offline")
+
+    # Get booth and its assigned event
+    result = await db.execute(
+        select(Booth).where(Booth.booth_id == booth_id)
+    )
+    booth = result.scalar_one_or_none()
+    if not booth:
+        raise HTTPException(status_code=404, detail="Booth not found")
+    if not booth.event_id:
+        raise HTTPException(status_code=400, detail="Booth has no event assigned")
+
+    # Get event data
+    from server.models.db import Event
+    ev_result = await db.execute(
+        select(Event).where(Event.id == booth.event_id)
+    )
+    event = ev_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Assigned event not found")
+
+    # Build push bundle
+    from server.config import settings
+    server_url = settings.server_url.rstrip("/")
+    push_data = {
+        "type": "push_event",
+        "event": {
+            "event_uid": event.uid,
+            "event_name": event.name,
+            "display_date": event.display_date or "",
+            "branding_text": event.branding_text or "",
+            "background_image": event.background_image,
+            "background_url": (
+                f"{server_url}/api/events/{event.uid}/background"
+                if event.background_image else None
+            ),
+        },
+    }
+
+    sent = await hub.send_to_booth(booth_id, push_data)
+    if not sent:
+        raise HTTPException(status_code=503, detail="Failed to send to booth")
+
+    logger.info("Event card pushed to booth %s: event=%s", booth_id, event.uid)
+    return {
+        "message": "Event card configuration pushed",
+        "booth_id": booth_id,
+        "event_uid": event.uid,
+    }
+

@@ -3,6 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
+import PageHeader from "@/app/components/PageHeader";
+import {
+  Button, Badge, Card, Modal, Toast, EmptyState, Spinner, Input, Select,
+} from "@/app/components/ui";
+import {
+  Plus, Key, Trash2, Copy, Camera, Cpu, Clock, Eye, Check, X as XIcon, AlertTriangle,
+} from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -65,7 +72,7 @@ export default function DashboardPage() {
   const [createForm, setCreateForm] = useState({ booth_id: "", name: "" });
   const [creating, setCreating] = useState(false);
 
-  // API key display modal (after creation or regeneration)
+  // API key display modal
   const [apiKeyInfo, setApiKeyInfo] = useState<{
     booth_id: string;
     api_key: string;
@@ -75,7 +82,6 @@ export default function DashboardPage() {
   const [toast, setToast] = useState("");
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(""), 2500);
   }, []);
 
   /* ---- Fetch ---- */
@@ -201,105 +207,51 @@ export default function DashboardPage() {
 
   /* ---- Render ---- */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-      {/* Header */}
-      <header className="border-b border-gray-800/50 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <>
+      <PageHeader
+        title="Booths"
+        subtitle={`${booths.length} booth${booths.length !== 1 ? "s" : ""} geregistreerd`}
+        actions={
           <div className="flex items-center gap-3">
-            <span className="text-2xl">📸</span>
-            <h1 className="text-xl font-bold text-white">Photobooth Admin</h1>
-          </div>
-          <div className="flex items-center gap-6">
-            <nav className="flex items-center gap-1">
-              <a
-                href="/"
-                className="px-3 py-1.5 text-sm text-white bg-gray-800/70 rounded-lg font-medium"
-              >
-                Booths
-              </a>
-              <a
-                href="/events"
-                className="px-3 py-1.5 text-sm text-gray-400 hover:text-white rounded-lg hover:bg-gray-800/50 transition"
-              >
-                Events
-              </a>
-            </nav>
-            <button
-              onClick={() => {
-                clearTokens();
-                router.replace("/login");
-              }}
-              className="text-gray-400 hover:text-white text-sm transition"
-            >
-              Uitloggen
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-white">Booths</h2>
-            <p className="text-gray-400 text-sm mt-1">
-              {booths.length} booth{booths.length !== 1 ? "s" : ""} geregistreerd
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-sm text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live
-            </span>
-            <button
+            <Badge variant="success" dot>Live</Badge>
+            <Button
+              variant="primary"
+              icon={<Plus />}
               onClick={() => setShowCreate(true)}
-              className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2"
             >
-              <span className="text-lg leading-none">+</span>
               Nieuwe Booth
-            </button>
+            </Button>
           </div>
-        </div>
+        }
+      />
 
         {loading ? (
           <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : error ? (
           <div className="text-center py-20">
             <p className="text-red-400">{error}</p>
           </div>
         ) : booths.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gray-800/50 mb-4">
-              <span className="text-4xl">📷</span>
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Geen booths</h3>
-            <p className="text-gray-400 text-sm max-w-sm mx-auto">
-              Registreer een nieuwe booth om te beginnen met beheren.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Camera />}
+            title="Geen booths"
+            description="Registreer een nieuwe booth om te beginnen met beheren."
+            action={{ label: "Nieuwe Booth", onClick: () => setShowCreate(true) }}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {booths.map((booth) => (
-              <div
-                key={booth.id}
-                className="group bg-gray-800/30 hover:bg-gray-800/50 border border-gray-700/30 hover:border-gray-600/50 rounded-2xl p-5 transition-all duration-200"
-              >
+              <Card key={booth.id} hover>
                 {/* Status header */}
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        booth.status === "online"
-                          ? "bg-emerald-500 shadow-lg shadow-emerald-500/50"
-                          : "bg-gray-600"
-                      }`}
-                    />
-                    <span className="text-sm font-medium text-gray-300">
-                      {booth.status === "online" ? "Online" : "Offline"}
-                    </span>
-                  </div>
+                  <Badge
+                    variant={booth.status === "online" ? "success" : "neutral"}
+                    dot
+                  >
+                    {booth.status === "online" ? "Online" : "Offline"}
+                  </Badge>
                   <div className="flex items-center gap-1">
                     {booth.version && (
                       <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
@@ -314,9 +266,7 @@ export default function DashboardPage() {
                       className="p-1 text-gray-500 hover:text-amber-400 rounded transition opacity-0 group-hover:opacity-100"
                       title="Regenereer API key"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                      </svg>
+                      <Key className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -326,14 +276,12 @@ export default function DashboardPage() {
                       className="p-1 text-gray-500 hover:text-red-400 rounded transition opacity-0 group-hover:opacity-100"
                       title="Verwijder booth"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* Name — clickable to detail */}
+                {/* Name */}
                 <div
                   className="cursor-pointer"
                   onClick={() => router.push(`/booths/${booth.booth_id}`)}
@@ -345,44 +293,48 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Event coupling */}
-                <div className="mb-4">
-                  <label className="text-xs text-gray-500 block mb-1">Event</label>
-                  <select
-                    value={booth.event_id || ""}
-                    onChange={(e) => handleEventChange(booth.booth_id, e.target.value)}
-                    className="w-full bg-gray-800/70 border border-gray-700/50 rounded-lg px-2 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-violet-500 transition appearance-none cursor-pointer"
-                  >
-                    <option value="">Geen event</option>
-                    {events
-                      .filter((ev) => ev.is_active)
-                      .map((ev) => (
-                        <option key={ev.id} value={ev.id}>
-                          {ev.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                <Select
+                  label="Event"
+                  value={booth.event_id || ""}
+                  onChange={(e) => handleEventChange(booth.booth_id, e.target.value)}
+                  wrapperClassName="mb-4"
+                >
+                  <option value="">Geen event</option>
+                  {events
+                    .filter((ev) => ev.is_active)
+                    .map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.name}
+                      </option>
+                    ))}
+                </Select>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">CPU</p>
+                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                      <Cpu className="w-3 h-3" /> CPU
+                    </p>
                     <p className="text-sm font-medium text-gray-300">
                       {booth.cpu_percent != null ? `${booth.cpu_percent}%` : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Camera</p>
+                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                      <Camera className="w-3 h-3" /> Camera
+                    </p>
                     <p className="text-sm font-medium">
                       {booth.camera_connected ? (
-                        <span className="text-emerald-400">✓</span>
+                        <Check className="w-4 h-4 text-emerald-400 inline" />
                       ) : (
-                        <span className="text-gray-500">✗</span>
+                        <XIcon className="w-4 h-4 text-gray-500 inline" />
                       )}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Uptime</p>
+                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Uptime
+                    </p>
                     <p className="text-sm font-medium text-gray-300">
                       {formatUptime(booth.uptime_seconds)}
                     </p>
@@ -391,94 +343,84 @@ export default function DashboardPage() {
 
                 {/* Last seen + event badge */}
                 <div className="mt-4 pt-3 border-t border-gray-700/30 flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
-                    Laatst gezien: {formatLastSeen(booth.last_seen)}
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Eye className="w-3 h-3" />
+                    {formatLastSeen(booth.last_seen)}
                   </p>
                   {booth.event_id && (
-                    <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full truncate max-w-[120px]">
+                    <Badge variant="info">
                       {getEventName(booth.event_id)}
-                    </span>
+                    </Badge>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
-      </main>
 
       {/* ---- Create Booth Modal ---- */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-700/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-4">Nieuwe Booth</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-400 block mb-1">Booth ID *</label>
-                <input
-                  type="text"
-                  value={createForm.booth_id}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, booth_id: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-violet-500 transition"
-                  placeholder="bv. booth-001"
-                  autoFocus
-                />
-                <p className="text-xs text-gray-600 mt-1">
-                  Unieke identifier — gebruik in booth.toml
-                </p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-400 block mb-1">Naam</label>
-                <input
-                  type="text"
-                  value={createForm.name}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, name: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500 transition"
-                  placeholder="bv. Photobooth Lobby"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition"
-              >
-                Annuleren
-              </button>
-              <button
-                onClick={handleCreateBooth}
-                disabled={!createForm.booth_id.trim() || creating}
-                className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-xl transition"
-              >
-                {creating ? "Aanmaken..." : "Registreren"}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Nieuwe Booth"
+        description="Registreer een nieuw photobooth device"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowCreate(false)}>
+              Annuleren
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateBooth}
+              disabled={!createForm.booth_id.trim()}
+              loading={creating}
+            >
+              Registreren
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            label="Booth ID *"
+            value={createForm.booth_id}
+            onChange={(e) =>
+              setCreateForm({ ...createForm, booth_id: e.target.value })
+            }
+            placeholder="bv. booth-001"
+            helper="Unieke identifier — gebruik in booth.toml"
+            className="font-mono"
+            autoFocus
+          />
+          <Input
+            label="Naam"
+            value={createForm.name}
+            onChange={(e) =>
+              setCreateForm({ ...createForm, name: e.target.value })
+            }
+            placeholder="bv. Photobooth Lobby"
+          />
         </div>
-      )}
+      </Modal>
 
       {/* ---- API Key Display Modal ---- */}
-      {apiKeyInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-700/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">API Key</h3>
-                <p className="text-xs text-gray-400">{apiKeyInfo.booth_id}</p>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 border border-amber-500/20 rounded-xl p-4 mb-4">
-              <p className="text-xs text-amber-400 mb-2 font-medium">
-                ⚠️ Deze key wordt maar één keer getoond!
+      <Modal
+        open={!!apiKeyInfo}
+        onClose={() => setApiKeyInfo(null)}
+        title="API Key"
+        description={apiKeyInfo?.booth_id}
+        actions={
+          <Button variant="primary" onClick={() => setApiKeyInfo(null)}>
+            Begrepen, sluiten
+          </Button>
+        }
+      >
+        {apiKeyInfo && (
+          <>
+            <div className="bg-gray-800 border border-amber-500/20 rounded-lg p-4 mb-4">
+              <p className="text-xs text-amber-400 mb-2 font-medium flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Deze key wordt maar één keer getoond!
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-sm text-white font-mono break-all bg-gray-900/50 p-2 rounded">
@@ -492,14 +434,12 @@ export default function DashboardPage() {
                   className="shrink-0 p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition"
                   title="Kopieer"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+                  <Copy className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <div className="bg-gray-800/50 rounded-xl p-3 mb-6">
+            <div className="bg-gray-800/50 rounded-lg p-3">
               <p className="text-xs text-gray-400 mb-1">Configureer in booth.toml:</p>
               <code className="text-xs text-gray-300 font-mono">
                 [server]<br />
@@ -507,25 +447,17 @@ export default function DashboardPage() {
                 api_key = &quot;{apiKeyInfo.api_key}&quot;
               </code>
             </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setApiKeyInfo(null)}
-                className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
-              >
-                Begrepen, sluiten
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* ---- Toast ---- */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-800 border border-gray-700/50 text-white text-sm px-4 py-2.5 rounded-xl shadow-lg animate-[fadeIn_0.2s]">
-          {toast}
-        </div>
+        <Toast
+          message={toast}
+          onDismiss={() => setToast("")}
+        />
       )}
-    </div>
+    </>
   );
 }

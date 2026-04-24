@@ -468,6 +468,16 @@ class OverlayLayer(Widget):
         self._rect.pos = self.pos
         self._rect.size = self.size
 
+    def on_touch_down(self, touch):
+        # Always pass touches through — this is a visual-only layer
+        return False
+
+    def on_touch_up(self, touch):
+        return False
+
+    def on_touch_move(self, touch):
+        return False
+
 
 # ---------------------------------------------------------------------------
 # Base screen
@@ -1804,9 +1814,13 @@ class CaptureScreen(BaseBoothScreen):
             raw_data = jpeg_data
 
             # Apply selected filter to captured photo
+            logger.info("[Capture] session filter=%r", _session.filter)
             if jpeg_data and _session.filter != "none":
                 from photobooth.services.processing import apply_filter_to_jpeg
                 jpeg_data = apply_filter_to_jpeg(jpeg_data, _session.filter)
+                logger.info("[Capture] Filter '%s' applied to captured photo", _session.filter)
+            else:
+                logger.info("[Capture] No filter applied (filter=%r)", _session.filter)
 
             if retake_idx is not None:
                 # --- Retake mode: replace a specific frame ---

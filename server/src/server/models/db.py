@@ -74,9 +74,13 @@ class Event(Base):
     uid = Column(String(8), unique=True, nullable=False, index=True, default=generate_short_uid)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    date = Column(DateTime, nullable=True)
-    location = Column(String(255), nullable=True)
+    date = Column(DateTime, nullable=True)       # Start date
+    end_date = Column(DateTime, nullable=True)   # End date
     is_active = Column(Boolean, default=True)
+    # Photo card customization
+    background_image = Column(String(500), nullable=True)  # filename in /data/backgrounds/
+    branding_text = Column(Text, nullable=True)             # Markdown text for branding strip
+    display_date = Column(String(100), nullable=True)       # e.g. "Woensdag 15 April 2026"
     created_by = Column(String(36), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())

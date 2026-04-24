@@ -39,11 +39,16 @@ async function proxyRequest(
   params: { path: string[] }
 ) {
   const path = params.path.join("/");
-  const url = `${API_URL}/${path}`;
+  const searchParams = request.nextUrl.searchParams.toString();
+  const url = `${API_URL}/${path}${searchParams ? `?${searchParams}` : ""}`;
 
-  const headers: Record<string, string> = {
-    "Content-Type": request.headers.get("Content-Type") || "application/json",
-  };
+  const headers: Record<string, string> = {};
+
+  // Forward content-type (but NOT for multipart — let fetch set the boundary)
+  const contentType = request.headers.get("Content-Type") || "";
+  if (contentType && !contentType.includes("multipart/form-data")) {
+    headers["Content-Type"] = contentType;
+  }
 
   // Forward auth header
   const auth = request.headers.get("Authorization");
@@ -52,10 +57,17 @@ async function proxyRequest(
   }
 
   try {
-    const body =
-      request.method !== "GET" && request.method !== "HEAD"
-        ? await request.text()
-        : undefined;
+    let body: BodyInit | undefined;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      // For multipart/form-data, pass the raw body as ArrayBuffer
+      if (contentType.includes("multipart/form-data")) {
+        body = await request.arrayBuffer();
+        // Re-set content type WITH boundary for multipart
+        headers["Content-Type"] = contentType;
+      } else {
+        body = await request.text();
+      }
+    }
 
     const res = await fetch(url, {
       method: request.method,
@@ -63,8 +75,24 @@ async function proxyRequest(
       body,
     });
 
-    const data = await res.json().catch(() => null);
+    // For image/binary responses, return as-is
+    const resContentType = res.headers.get("Content-Type") || "";
+    if (
+      resContentType.startsWith("image/") ||
+      resContentType.startsWith("application/octet-stream")
+    ) {
+      const data = await res.arrayBuffer();
+      return new NextResponse(data, {
+        status: res.status,
+        headers: {
+          "Content-Type": resContentType,
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
 
+    // JSON responses
+    const data = await res.json().catch(() => null);
     return NextResponse.json(data, { status: res.status });
   } catch (error) {
     console.error(`Proxy error: ${url}`, error);

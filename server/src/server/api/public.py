@@ -28,7 +28,7 @@ async def get_public_event(
 ):
     """Get event info by short UID (for QR code landing pages).
 
-    Returns event name, description, date, location — no sensitive data.
+    Returns event name, description, date — no sensitive data.
     """
     result = await db.execute(select(Event).where(Event.uid == uid))
     event = result.scalar_one_or_none()
@@ -42,7 +42,7 @@ async def get_public_event(
         "name": event.name,
         "description": event.description,
         "date": event.date.isoformat() if event.date else None,
-        "location": event.location,
+        "end_date": event.end_date.isoformat() if event.end_date else None,
     }
 
 

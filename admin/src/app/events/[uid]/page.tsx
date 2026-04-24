@@ -55,7 +55,7 @@ const CARD = {
   branding: {
     heightPercent: 15,
     accentLine: { thickness: 3, offsetTop: 8 },
-    colors: { background: "#1C2028", text: "#EDE8D0", accent: "#C29958" },
+    colors: { background: "#1C2028", text: "#EDE8D0", accent: "#FFFFFF" },
     fonts: { titleSize: 36, dateSize: 22, lineHeight: 42 },
   },
   layouts: {
@@ -729,9 +729,6 @@ export default function EventDetailPage() {
                     }}
                   />
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-white/20 rounded-md flex items-center justify-center shrink-0">
-                      <span className="text-[8px]" style={{ color: CARD.branding.colors.text }}>LOGO</span>
-                    </div>
                     <div className="flex-1 min-w-0">
                       <div
                         className="text-[8px] leading-tight line-clamp-2"
@@ -740,15 +737,18 @@ export default function EventDetailPage() {
                           __html: renderSimpleMarkdown(brandingText),
                         }}
                       />
+                      {displayDate && (
+                        <div
+                          className="text-[5px] leading-tight whitespace-nowrap mt-0.5"
+                          style={{ color: CARD.branding.colors.text, opacity: 0.7 }}
+                        >
+                          {displayDate}
+                        </div>
+                      )}
                     </div>
-                    {displayDate && (
-                      <div
-                        className="text-[6px] shrink-0 text-right leading-tight whitespace-nowrap"
-                        style={{ color: CARD.branding.colors.text, opacity: 0.7 }}
-                      >
-                        {displayDate}
-                      </div>
-                    )}
+                    <div className="w-7 h-7 bg-white/20 rounded-md flex items-center justify-center shrink-0">
+                      <span className="text-[8px]" style={{ color: CARD.branding.colors.text }}>LOGO</span>
+                    </div>
                   </div>
                 </div>
               </div>

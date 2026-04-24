@@ -75,7 +75,7 @@ def _default_card_layout() -> dict[str, Any]:
             "colors": {
                 "background": "#1C2028",
                 "text": "#EDE8D0",
-                "accent": "#C29958",
+                "accent": "#FFFFFF",
             },
             "fonts": {
                 "titleSize": 36,

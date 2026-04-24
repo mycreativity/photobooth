@@ -1,13 +1,7 @@
 /**
  * Consistent page header used across all admin pages.
- *
- * Usage:
- *   <PageHeader
- *     title="Booths"
- *     subtitle="3 booths geregistreerd"
- *     actions={<button>+ Nieuwe Booth</button>}
- *   />
  */
+import { ChevronLeft } from "lucide-react";
 
 interface PageHeaderProps {
   title: string;
@@ -32,19 +26,7 @@ export default function PageHeader({
             href={backHref}
             className="p-1.5 -ml-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <ChevronLeft className="w-5 h-5" />
           </a>
         )}
         <div>

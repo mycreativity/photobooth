@@ -15,6 +15,7 @@ services:
       - server-data:/data                    # Persistent: DB + photos
       - ./server/src:/app/src                # Dev: live reload source code
       - ./shared:/app/shared                 # Dev: shared protocol
+      - ./server/presets/backgrounds:/data/backgrounds/presets  # Background presets
     networks:
       - photobooth
       - proxy                                # Traefik network
