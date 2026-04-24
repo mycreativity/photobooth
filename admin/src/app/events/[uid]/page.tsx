@@ -50,7 +50,7 @@ const PUBLIC_BASE = "https://booth.mycreativity.nl/e";
 
 const CARD = {
   canvas: { width: 1200, height: 1800 },
-  photoRatio: 1.4,
+  photoRatio: 1.25,
   padding: 30, // px at print resolution
   branding: {
     heightPercent: 15,
@@ -62,25 +62,25 @@ const CARD = {
     single: {
       label: "Enkele foto",
       photosNeeded: 1,
-      slots: [{ x: 0, y: 22.3, w: 100, h: 55.4 }],
+      slots: [{ x: 0, y: 19.0, w: 100, h: 62.0 }],
     },
     strip: {
       label: "Fotostrip",
       photosNeeded: 3,
       slots: [
-        { x: 0, y: 7.8, w: 100, h: 55.4 },
-        { x: 0, y: 65.2, w: 48.7, h: 26.9 },
-        { x: 51.3, y: 65.2, w: 48.7, h: 26.9 },
+        { x: 0, y: 2.9, w: 100, h: 62.0 },
+        { x: 0, y: 66.9, w: 48.7, h: 30.2 },
+        { x: 51.3, y: 66.9, w: 48.7, h: 30.2 },
       ],
     },
     grid: {
       label: "Fotogrid",
       photosNeeded: 4,
       slots: [
-        { x: 0, y: 22.0, w: 48.7, h: 26.9 },
-        { x: 51.3, y: 22.0, w: 48.7, h: 26.9 },
-        { x: 0, y: 51.0, w: 48.7, h: 26.9 },
-        { x: 51.3, y: 51.0, w: 48.7, h: 26.9 },
+        { x: 0, y: 18.8, w: 48.7, h: 30.2 },
+        { x: 51.3, y: 18.8, w: 48.7, h: 30.2 },
+        { x: 0, y: 51.0, w: 48.7, h: 30.2 },
+        { x: 51.3, y: 51.0, w: 48.7, h: 30.2 },
       ],
     },
   },
