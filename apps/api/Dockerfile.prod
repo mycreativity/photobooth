@@ -6,13 +6,15 @@ WORKDIR /app
 # Copy source
 COPY pyproject.toml .
 COPY src/ src/
+COPY presets/ presets/
 
 # Install in non-editable mode for production
 RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir .
 
-# Create data directory
-RUN mkdir -p /data/photos
+# Create data directory and copy presets
+RUN mkdir -p /data/photos /data/backgrounds/presets && \
+    cp -r presets/backgrounds/* /data/backgrounds/presets/
 
 EXPOSE 8000
 
