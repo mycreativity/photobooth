@@ -35,7 +35,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.pb-api.rule=Host(`photobooth-api.mycreativity.nl`)"
       - "traefik.http.routers.pb-api.entrypoints=websecure"
-      - "traefik.http.routers.pb-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pb-api.tls.certresolver=myresolver"
       - "traefik.http.services.pb-api.loadbalancer.server.port=8000"
       - "traefik.docker.network=proxy"
     restart: unless-stopped
@@ -59,7 +59,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.pb-admin.rule=Host(`photobooth-admin.mycreativity.nl`)"
       - "traefik.http.routers.pb-admin.entrypoints=websecure"
-      - "traefik.http.routers.pb-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pb-admin.tls.certresolver=myresolver"
       - "traefik.http.services.pb-admin.loadbalancer.server.port=3000"
       - "traefik.docker.network=proxy"
     depends_on:
@@ -80,7 +80,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.pb-viewer.rule=Host(`photobooth.mycreativity.nl`)"
       - "traefik.http.routers.pb-viewer.entrypoints=websecure"
-      - "traefik.http.routers.pb-viewer.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pb-viewer.tls.certresolver=myresolver"
       - "traefik.http.services.pb-viewer.loadbalancer.server.port=3000"
       - "traefik.docker.network=proxy"
     depends_on:
