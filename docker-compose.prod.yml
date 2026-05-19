@@ -8,15 +8,18 @@ services:
       dockerfile: Dockerfile.prod
     volumes: !override
       - ./data:/data                           # Persistent: DB + photos
+    ports: !reset []
 
   admin:
     build:
       context: ./apps/admin
       dockerfile: Dockerfile.prod
     volumes: !reset []
+    ports: !reset []
 
   viewer:
     build:
       context: ./apps/viewer
       dockerfile: Dockerfile.prod
     volumes: !reset []
+    ports: !reset []
