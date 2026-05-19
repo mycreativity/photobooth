@@ -1,0 +1,22 @@
+# Production overrides — layered on top of docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.prod
+    volumes: !override
+      - ./data:/data                           # Persistent: DB + photos
+
+  admin:
+    build:
+      context: ./apps/admin
+      dockerfile: Dockerfile.prod
+    volumes: !reset []
+
+  viewer:
+    build:
+      context: ./apps/viewer
+      dockerfile: Dockerfile.prod
+    volumes: !reset []

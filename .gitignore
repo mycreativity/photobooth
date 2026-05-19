@@ -33,3 +33,6 @@ out/
 
 # Docker
 *.log
+
+# Data (bind mount)
+data/

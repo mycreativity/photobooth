@@ -6,32 +6,33 @@ Touchscreen photobooth met DSLR camera, LED-verlichting, en een online admin por
 
 | App | Directory | Tech | Beschrijving |
 |---|---|---|---|
-| **Booth** | `booth/` | Python / Kivy | Photobooth app op Raspberry Pi |
-| **Server** | `server/` | Python / FastAPI | REST API + WebSocket hub |
-| **Admin** | `admin/` | Next.js | Beheer dashboard |
-| **Shared** | `shared/` | Python | Gedeeld WS protocol |
+| **Admin** | `apps/admin/` | Next.js | Beheer dashboard |
+| **API** | `apps/api/` | Python / FastAPI | REST API + WebSocket hub |
+| **Booth** | `apps/booth/` | Python / Kivy | Photobooth app op Raspberry Pi |
+| **Viewer** | `apps/viewer/` | Next.js | Publieke foto viewer per event |
+| **Shared** | `packages/shared/` | Python | Gedeeld WS protocol + constants |
 
 ## Quick start (dev)
 
 ```bash
-# Server + Admin via Docker
+# Alle services via Docker
 cp .env.example .env   # vul SMTP credentials in
 docker compose up --build
 
 # Of los draaien:
-cd server && pip install -e . && python -m server
-cd admin && npm install && npm run dev
+cd apps/api && pip install -e . && python -m api
+cd apps/admin && npm install && npm run dev
 ```
 
 ## Subdomeinen
 
-- `api.mycreativity.nl` — API server
-- `admin.mycreativity.nl` — Admin dashboard
-- `booth.mycreativity.nl` — Publieke gasten app
+- `photobooth-api.mycreativity.nl` — API server
+- `photobooth-admin.mycreativity.nl` — Admin dashboard
+- `photobooth.mycreativity.nl` — Publieke foto viewer
 
 ## Booth deployment
 
 ```bash
-cd booth/ansible
+cd apps/booth/ansible
 ansible-playbook -i inventory.ini deploy.yml
 ```
