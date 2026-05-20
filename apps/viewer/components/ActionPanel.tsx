@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, Share2, ChevronLeft, ChevronRight } from "lucide-react";
+import { downloadPhoto } from "@/lib/share";
 import styles from "./ActionPanel.module.css";
 
 interface ActionPanelProps {
@@ -10,54 +11,18 @@ interface ActionPanelProps {
     url: string;
     seq: number;
   };
+  onShare: () => void;
   onPrev?: () => void;
   onNext?: () => void;
 }
 
-export function ActionPanel({ photo, onPrev, onNext }: ActionPanelProps) {
+export function ActionPanel({ photo, onShare, onPrev, onNext }: ActionPanelProps) {
   const isLayout = photo.variant === "print";
 
-  async function handleShare() {
-    const photoUrl = `/api${photo.url}`;
-
-    if (navigator.share) {
-      try {
-        // Try to share the actual image file
-        const response = await fetch(photoUrl);
-        const blob = await response.blob();
-        const file = new File([blob], `photo_${photo.seq}.jpg`, { type: "image/jpeg" });
-
-        await navigator.share({
-          title: isLayout ? "Mijn photobooth strip" : `Photobooth foto ${photo.seq}`,
-          files: [file],
-        });
-      } catch (err) {
-        // User cancelled or share failed — try URL share
-        if (err instanceof Error && err.name !== "AbortError") {
-          await navigator.share({
-            title: isLayout ? "Mijn photobooth strip" : `Photobooth foto`,
-            url: window.location.href,
-          });
-        }
-      }
-    } else {
-      // Desktop fallback: copy link
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        // TODO: Show toast notification
-      } catch {
-        // Clipboard not available
-      }
-    }
-  }
-
   function handleDownload() {
-    const link = document.createElement("a");
-    link.href = `/api${photo.url}`;
-    link.download = isLayout
-      ? `photobooth_strip.jpg`
-      : `photo_${photo.seq}.jpg`;
-    link.click();
+    const photoUrl = `/api${photo.url}`;
+    const filename = isLayout ? "photobooth_strip.jpg" : `photobooth_${photo.seq}.jpg`;
+    downloadPhoto(photoUrl, filename);
   }
 
   return (
@@ -75,7 +40,7 @@ export function ActionPanel({ photo, onPrev, onNext }: ActionPanelProps) {
 
         {/* Actions */}
         <div className={styles.actions}>
-          <button className={styles.actionBtn} onClick={handleShare}>
+          <button className={styles.actionBtn} onClick={onShare}>
             <Share2 size={20} />
             <span>Deel</span>
           </button>

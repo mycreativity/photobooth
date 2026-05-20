@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { SessionViewer } from "@/components/SessionViewer";
 import { ErrorState } from "@/components/ErrorState";
+import { EmptyState } from "@/components/EmptyState";
 import { Loader2 } from "lucide-react";
 import styles from "./SessionPage.module.css";
 
@@ -89,6 +90,10 @@ export default function SessionPage({
 
   if (!session) {
     return <ErrorState code={404} message="Sessie niet gevonden" />;
+  }
+
+  if (photos.length === 0) {
+    return <EmptyState eventName={session.event?.name} />;
   }
 
   return (

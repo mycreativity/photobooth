@@ -12,17 +12,20 @@
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  border-radius: 4px;
+  box-shadow:
+    var(--shadow-lg),
+    0 0 60px rgba(0, 0, 0, 0.4);
   user-select: none;
   pointer-events: none;
 }
 
 .layout .image {
-  border-radius: var(--radius-md);
+  border-radius: 2px;
   box-shadow:
     var(--shadow-lg),
-    0 0 40px var(--brand-teal-glow);
+    0 0 40px var(--brand-teal-glow),
+    0 0 80px rgba(200, 149, 108, 0.08);
 }
 
 .badge {
@@ -30,12 +33,12 @@
   top: calc(var(--space-16) + var(--space-2));
   right: var(--space-6);
   padding: var(--space-1) var(--space-3);
-  background: var(--glass-bg);
+  background: rgba(255, 159, 106, 0.15);
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
+  border: 1px solid rgba(255, 159, 106, 0.25);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--brand-teal);
+  font-weight: var(--font-weight-semibold);
+  color: var(--party-warm);
   letter-spacing: 0.05em;
 }

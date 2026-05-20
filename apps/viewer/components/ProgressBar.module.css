@@ -13,15 +13,16 @@
   flex: 1;
   height: 3px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   transition: background var(--transition-base);
 }
 
 .active {
-  background: var(--brand-teal);
-  box-shadow: 0 0 6px var(--brand-teal-glow);
+  background: linear-gradient(90deg, var(--party-warm), var(--brand-teal));
+  box-shadow: 0 0 8px rgba(255, 159, 106, 0.3);
 }
 
 .done {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--party-warm);
+  opacity: 0.5;
 }

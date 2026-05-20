@@ -59,6 +59,29 @@ async def lifespan(app: FastAPI):
             except Exception:
                 pass  # Column already exists
 
+        # Session token for public viewer URLs
+        try:
+            await conn.execute(sa.text(
+                "ALTER TABLE sessions ADD COLUMN token VARCHAR(32)"
+            ))
+            logger.info("Added column sessions.token")
+        except Exception:
+            pass  # Column already exists
+
+        # Backfill existing sessions without tokens
+        await conn.execute(sa.text(
+            "UPDATE sessions SET token = lower(hex(randomblob(16))) "
+            "WHERE token IS NULL"
+        ))
+
+        # Create unique index if not exists
+        try:
+            await conn.execute(sa.text(
+                "CREATE UNIQUE INDEX ix_sessions_token ON sessions(token)"
+            ))
+        except Exception:
+            pass  # Index already exists
+
     logger.info("Database tables created")
 
     # AC4: Reset all booth statuses to "offline" on startup (crash recovery)
