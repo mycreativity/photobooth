@@ -92,7 +92,7 @@ export function SessionViewer({ session, photos }: SessionViewerProps) {
     if (!sessionStorage.getItem(key)) {
       sessionStorage.setItem(key, "1");
       setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3500);
+      setTimeout(() => setShowConfetti(false), 9000);
     }
   }, [session.token]);
 
