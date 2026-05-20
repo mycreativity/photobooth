@@ -20,7 +20,7 @@ export function ActionPanel({ photo, onShare, onPrev, onNext }: ActionPanelProps
   const isLayout = photo.variant === "print";
 
   function handleDownload() {
-    const photoUrl = `/api${photo.url}`;
+    const photoUrl = `${process.env.NEXT_PUBLIC_API_URL || "/api"}${photo.url}`;
     const filename = isLayout ? "photobooth_strip.jpg" : `photobooth_${photo.seq}.jpg`;
     downloadPhoto(photoUrl, filename);
   }
