@@ -23,6 +23,20 @@ PHOTOS_DIR = Path(os.getenv("PHOTOS_DIR", "/data/photos"))
 SESSION_EXPIRY_DAYS = 30
 
 
+@router.get("/sessions/lookup/{session_id}")
+async def lookup_session_token(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lookup a session token by session ID (for QR code generation)."""
+    result = await db.execute(
+        select(Session).where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session_id": session.id, "token": session.token}
+
 @router.get("/events/{uid}")
 async def get_public_event(
     uid: str,

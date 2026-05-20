@@ -148,6 +148,7 @@ async def upload_photo(
     return {
         "id": photo.id,
         "session_id": session_id,
+        "session_token": session.token if session else None,
         "filename": rel_path,
         "width": width,
         "height": height,
