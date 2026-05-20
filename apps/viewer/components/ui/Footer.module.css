@@ -1,0 +1,24 @@
+.footer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+  transition: opacity var(--transition-base);
+}
+
+.footer:hover .text {
+  opacity: 0.8;
+}
+
+.brand {
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--brand-wood);
+}

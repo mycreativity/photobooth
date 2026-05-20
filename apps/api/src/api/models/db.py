@@ -111,6 +111,8 @@ class Session(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     event_id = Column(String(36), nullable=True, index=True)
     booth_id = Column(String(100), nullable=True)
+    token = Column(String(32), unique=True, nullable=False, index=True,
+                   default=lambda: secrets.token_hex(16))
     photo_count = Column(Integer, default=0)
     layout = Column(String(50), nullable=True)
     filter_name = Column(String(100), nullable=True)
