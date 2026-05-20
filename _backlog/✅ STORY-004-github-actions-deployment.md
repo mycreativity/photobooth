@@ -1,6 +1,6 @@
 # [STORY-004] CI/CD Deployment Pipeline via GitHub Actions
 
-> **Status:** 🔨 In Progress
+> **Status:** ✅ Done
 > **Priority:** 🟠 High
 > **Component:** infra
 > **Estimate:** M
@@ -153,3 +153,9 @@ _Notities uit de refinement sessie._
   - Prod Dockerfiles: meenemen in deze story (viewer + API ontbreken)
   - Docker Compose: `docker-compose.prod.yml` override, geen dev mounts, alleen `./data:/data`
   - Branch: alleen `main` deployt, PRs per user story
+- 2026-05-19: Implementatie afgerond. Alle bestanden aangemaakt en gepusht. Iteratief gedebugged:
+  - Git-based deploy → SCP-based deploy (server had geen GitHub SSH access)
+  - Certresolver `letsencrypt` → `myresolver` (Traefik config match)
+  - Port 3000 conflict → ports verwijderd in prod (Traefik routeert intern)
+  - Next.js 16 standalone binding fix → `HOSTNAME=0.0.0.0`
+  - Alle drie subdomeinen live: API, Admin, Viewer

@@ -1,0 +1,28 @@
+.container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  gap: 3px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.segment {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  transition: background var(--transition-base);
+}
+
+.active {
+  background: linear-gradient(90deg, var(--party-warm), var(--brand-teal));
+  box-shadow: 0 0 8px rgba(255, 159, 106, 0.3);
+}
+
+.done {
+  background: var(--party-warm);
+  opacity: 0.5;
+}

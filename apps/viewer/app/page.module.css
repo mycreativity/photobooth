@@ -1,0 +1,36 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-8);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  justify-content: center;
+  gap: var(--space-10);
+}
+
+.logo {
+  width: 300px;
+  height: auto;
+}
+
+@media (min-width: 640px) {
+  .logo {
+    width: 400px;
+  }
+}
+
+.instruction {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
+  max-width: 320px;
+}

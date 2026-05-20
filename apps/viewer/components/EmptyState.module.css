@@ -1,0 +1,70 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-8);
+  background: var(--color-bg);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+  justify-content: center;
+}
+
+.pulseWrap {
+  position: relative;
+  margin-bottom: var(--space-8);
+}
+
+.pulse {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: var(--party-warm);
+  opacity: 0.15;
+  animation: pulseAnim 2s ease-in-out infinite;
+}
+
+@keyframes pulseAnim {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.15;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.05;
+  }
+}
+
+.icon {
+  position: relative;
+  color: var(--party-warm);
+  z-index: 1;
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+}
+
+.subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  max-width: 280px;
+  line-height: var(--line-height-normal);
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  margin-top: var(--space-4);
+}
