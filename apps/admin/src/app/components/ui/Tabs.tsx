@@ -15,7 +15,7 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onChange, className = "" }: TabsProps) {
   return (
-    <div className={`flex border-b border-gray-800/50 ${className}`}>
+    <div className={`flex border-b border-[var(--card-border)] ${className}`}>
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -25,8 +25,8 @@ export default function Tabs({ tabs, active, onChange, className = "" }: TabsPro
             text-sm font-medium border-b-2 transition-colors
             ${
               active === tab.key
-                ? "text-violet-400 border-violet-400"
-                : "text-gray-400 border-transparent hover:text-gray-300 hover:border-gray-700"
+                ? "text-[var(--accent-dark)] border-[var(--accent)]"
+                : "text-[var(--muted)] border-transparent hover:text-[var(--foreground)] hover:border-gray-300"
             }
           `}
         >

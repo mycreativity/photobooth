@@ -530,7 +530,7 @@ export default function EventDetailPage() {
             {/* Background picker */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-white">
+                <h4 className="text-sm font-semibold text-[var(--foreground)]">
                   Achtergrond afbeelding
                 </h4>
                 {selectedBg && (
@@ -538,7 +538,7 @@ export default function EventDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={removeBg}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-[var(--danger)] hover:text-[var(--danger)]"
                   >
                     Verwijder achtergrond
                   </Button>
@@ -552,8 +552,8 @@ export default function EventDetailPage() {
                     onClick={() => selectPreset(preset.name)}
                     className={`relative group rounded-xl overflow-hidden border-2 transition-all duration-200 aspect-[2/3] ${
                       selectedBg === `presets/${preset.name}`
-                        ? "border-violet-500 ring-2 ring-violet-500/30"
-                        : "border-gray-700/50 hover:border-gray-600"
+                        ? "border-violet-500 ring-2 ring-[var(--accent)]/20"
+                        : "border-[var(--card-border)] hover:border-gray-300"
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -564,20 +564,20 @@ export default function EventDetailPage() {
                       loading="lazy"
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
-                      <span className="text-[10px] text-white font-medium leading-tight block">
+                      <span className="text-[10px] text-[var(--foreground)] font-medium leading-tight block">
                         {preset.label}
                       </span>
                     </div>
                     {selectedBg === `presets/${preset.name}` && (
-                      <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-violet-500 rounded-full flex items-center justify-center">
-                        <Check className="w-3 h-3 text-white" />
+                      <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-[var(--accent-dark)] rounded-full flex items-center justify-center">
+                        <Check className="w-3 h-3 text-[var(--foreground)]" />
                       </div>
                     )}
                   </button>
                 ))}
 
                 {/* Upload custom */}
-                <label className="relative rounded-xl border-2 border-dashed border-gray-700 hover:border-gray-500 cursor-pointer transition-all duration-200 aspect-[2/3] flex flex-col items-center justify-center gap-1.5">
+                <label className="relative rounded-xl border-2 border-dashed border-[var(--card-border)] hover:border-gray-300 cursor-pointer transition-all duration-200 aspect-[2/3] flex flex-col items-center justify-center gap-1.5">
                   <input
                     type="file"
                     accept="image/*"
@@ -587,8 +587,8 @@ export default function EventDetailPage() {
                       if (file) uploadCustomBg(file);
                     }}
                   />
-                  <Plus className="w-6 h-6 text-gray-500" />
-                  <span className="text-[10px] text-gray-500 font-medium">
+                  <Plus className="w-6 h-6 text-[var(--muted-light)]" />
+                  <span className="text-[10px] text-[var(--muted-light)] font-medium">
                     Upload
                   </span>
                 </label>
@@ -597,7 +597,7 @@ export default function EventDetailPage() {
 
             {/* Branding text */}
             <div>
-              <h4 className="text-sm font-semibold text-white mb-3">
+              <h4 className="text-sm font-semibold text-[var(--foreground)] mb-3">
                 Tekst op strook
               </h4>
               <div className="space-y-4">
@@ -620,11 +620,11 @@ export default function EventDetailPage() {
                 />
 
                 <div>
-                  <label className="text-sm text-gray-400 block mb-1.5">
+                  <label className="text-sm text-[var(--muted)] block mb-1.5">
                     Voorbeeld
                   </label>
                   <div
-                    className="bg-gray-800/30 border border-gray-700/30 rounded-lg px-4 py-3 text-white text-sm"
+                    className="bg-white border border-[var(--card-border)] rounded-lg px-4 py-3 text-[var(--foreground)] text-sm"
                     dangerouslySetInnerHTML={{
                       __html: renderSimpleMarkdown(brandingText),
                     }}
@@ -634,7 +634,7 @@ export default function EventDetailPage() {
             </div>
 
             {/* Push to booth button */}
-            <div className="pt-2 border-t border-gray-800/30">
+            <div className="pt-2 border-t border-[var(--card-border)]">
               <Button
                 variant="secondary"
                 icon={<Send />}
@@ -642,7 +642,7 @@ export default function EventDetailPage() {
               >
                 Push naar Booth
               </Button>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-[var(--muted-light)] mt-2">
                 Stuurt de fotokaart instellingen naar alle verbonden booths
               </p>
             </div>
@@ -650,20 +650,20 @@ export default function EventDetailPage() {
 
           {/* Right: Live preview */}
           <div className="w-[340px] shrink-0">
-            <h4 className="text-sm font-semibold text-gray-400 mb-3">
+            <h4 className="text-sm font-semibold text-[var(--muted)] mb-3">
               Preview
             </h4>
             <div className="sticky top-6">
               {/* Layout selector */}
-              <div className="flex gap-1 mb-3 bg-gray-800/50 rounded-lg p-1">
+              <div className="flex gap-1 mb-3 bg-gray-50 rounded-lg p-1">
                 {(Object.keys(CARD.layouts) as PreviewLayout[]).map((key) => (
                   <button
                     key={key}
                     onClick={() => setPreviewLayout(key)}
                     className={`flex-1 text-[11px] font-medium py-1.5 rounded-md transition-all ${
                       previewLayout === key
-                        ? "bg-violet-600 text-white shadow-sm"
-                        : "text-gray-400 hover:text-gray-300"
+                        ? "bg-[var(--accent)] text-[var(--foreground)] shadow-sm"
+                        : "text-[var(--muted)] hover:text-[var(--foreground)]"
                     }`}
                   >
                     {CARD.layouts[key].label}
@@ -672,7 +672,7 @@ export default function EventDetailPage() {
               </div>
 
               <div
-                className="relative rounded-xl overflow-hidden border border-gray-700/50 shadow-lg"
+                className="relative rounded-xl overflow-hidden border border-[var(--card-border)] shadow-lg"
                 style={{ aspectRatio: `${CARD.canvas.width}/${CARD.canvas.height}` }}
               >
                 {/* Background */}
@@ -708,7 +708,7 @@ export default function EventDetailPage() {
                         height: `${slot.h}%`,
                       }}
                     >
-                      <span className="text-gray-600 text-[9px] font-medium flex items-center gap-0.5">
+                      <span className="text-[var(--muted)] text-[9px] font-medium flex items-center gap-0.5">
                         <Camera className="w-3 h-3" />
                         {i + 1}
                       </span>
@@ -758,7 +758,7 @@ export default function EventDetailPage() {
                   )}
                 </div>
               </div>
-              <p className="text-[10px] text-gray-500 mt-2 text-center">
+              <p className="text-[10px] text-[var(--muted-light)] mt-2 text-center">
                 10 × 15 cm fotokaart • {CARD.layouts[previewLayout].label}
               </p>
             </div>
@@ -789,11 +789,11 @@ export default function EventDetailPage() {
               {/* Info */}
               <div className="flex-1 space-y-5">
                 <div>
-                  <h4 className="text-sm font-semibold text-white mb-2">
+                  <h4 className="text-sm font-semibold text-[var(--foreground)] mb-2">
                     Publieke galerij URL
                   </h4>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-gray-800 border border-gray-700/50 px-3 py-2 rounded-lg text-sm text-gray-300 font-mono truncate">
+                    <code className="flex-1 bg-gray-50 border border-[var(--card-border)] px-3 py-2 rounded-lg text-sm text-[var(--foreground)] font-mono truncate">
                       {PUBLIC_BASE}/{event.uid}
                     </code>
                     <Button
@@ -813,11 +813,11 @@ export default function EventDetailPage() {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-semibold text-white mb-2">
+                  <h4 className="text-sm font-semibold text-[var(--foreground)] mb-2">
                     Event UID
                   </h4>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-gray-800 border border-gray-700/50 px-3 py-2 rounded-lg text-sm text-gray-300 font-mono">
+                    <code className="flex-1 bg-gray-50 border border-[var(--card-border)] px-3 py-2 rounded-lg text-sm text-[var(--foreground)] font-mono">
                       {event.uid}
                     </code>
                     <Button
@@ -846,7 +846,7 @@ export default function EventDetailPage() {
                   </Button>
                 </div>
 
-                <p className="text-xs text-gray-500 pt-2">
+                <p className="text-xs text-[var(--muted-light)] pt-2">
                   Gasten kunnen deze QR-code scannen om de publieke foto
                   galerij van het event te bekijken.
                 </p>
@@ -878,9 +878,9 @@ export default function EventDetailPage() {
           </>
         }
       >
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[var(--muted)]">
           Weet je zeker dat je{" "}
-          <strong className="text-white">{form.name}</strong> wilt
+          <strong className="text-[var(--foreground)]">{form.name}</strong> wilt
           verwijderen? Dit kan niet ongedaan worden.
         </p>
       </Modal>

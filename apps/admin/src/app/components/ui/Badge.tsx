@@ -10,19 +10,19 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  danger: "bg-red-500/10 text-red-400 border-red-500/20",
-  neutral: "bg-gray-700/50 text-gray-400 border-gray-600/30",
-  info: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  success: "bg-[var(--success-light)] text-emerald-700 border-emerald-200",
+  warning: "bg-[var(--warning-light)] text-amber-700 border-amber-200",
+  danger: "bg-[var(--danger-light)] text-red-700 border-red-200",
+  neutral: "bg-gray-100 text-gray-600 border-gray-200",
+  info: "bg-[var(--info-light)] text-blue-700 border-blue-200",
 };
 
 const dotColors: Record<BadgeVariant, string> = {
   success: "bg-emerald-500",
   warning: "bg-amber-500",
   danger: "bg-red-500",
-  neutral: "bg-gray-500",
-  info: "bg-violet-500",
+  neutral: "bg-gray-400",
+  info: "bg-blue-500",
 };
 
 export default function Badge({

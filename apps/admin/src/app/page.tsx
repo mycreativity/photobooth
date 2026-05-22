@@ -231,7 +231,7 @@ export default function DashboardPage() {
           </div>
         ) : error ? (
           <div className="text-center py-20">
-            <p className="text-red-400">{error}</p>
+            <p className="text-[var(--danger)]">{error}</p>
           </div>
         ) : booths.length === 0 ? (
           <EmptyState
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                   </Badge>
                   <div className="flex items-center gap-1">
                     {booth.version && (
-                      <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                      <span className="text-xs text-[var(--muted-light)] bg-gray-100 px-2 py-0.5 rounded-full">
                         v{booth.version}
                       </span>
                     )}
@@ -263,7 +263,7 @@ export default function DashboardPage() {
                         e.stopPropagation();
                         handleRegenerateKey(booth.booth_id);
                       }}
-                      className="p-1 text-gray-500 hover:text-amber-400 rounded transition opacity-0 group-hover:opacity-100"
+                      className="p-1 text-[var(--muted-light)] hover:text-[var(--warm)] rounded transition opacity-0 group-hover:opacity-100"
                       title="Regenereer API key"
                     >
                       <Key className="w-4 h-4" />
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                         e.stopPropagation();
                         handleDeleteBooth(booth.booth_id);
                       }}
-                      className="p-1 text-gray-500 hover:text-red-400 rounded transition opacity-0 group-hover:opacity-100"
+                      className="p-1 text-[var(--muted-light)] hover:text-[var(--danger)] rounded transition opacity-0 group-hover:opacity-100"
                       title="Verwijder booth"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -286,10 +286,10 @@ export default function DashboardPage() {
                   className="cursor-pointer"
                   onClick={() => router.push(`/booths/${booth.booth_id}`)}
                 >
-                  <h3 className="text-lg font-semibold text-white mb-1 group-hover:text-violet-300 transition">
+                  <h3 className="text-lg font-semibold text-[var(--foreground)] mb-1 group-hover:text-[var(--accent-dark)] transition">
                     {booth.name || booth.booth_id}
                   </h3>
-                  <p className="text-xs text-gray-500 font-mono mb-4">{booth.booth_id}</p>
+                  <p className="text-xs text-[var(--muted-light)] font-mono mb-4">{booth.booth_id}</p>
                 </div>
 
                 {/* Event coupling */}
@@ -312,38 +312,38 @@ export default function DashboardPage() {
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                    <p className="text-xs text-[var(--muted-light)] mb-0.5 flex items-center gap-1">
                       <Cpu className="w-3 h-3" /> CPU
                     </p>
-                    <p className="text-sm font-medium text-gray-300">
+                    <p className="text-sm font-medium text-[var(--foreground)]">
                       {booth.cpu_percent != null ? `${booth.cpu_percent}%` : "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                    <p className="text-xs text-[var(--muted-light)] mb-0.5 flex items-center gap-1">
                       <Camera className="w-3 h-3" /> Camera
                     </p>
                     <p className="text-sm font-medium">
                       {booth.camera_connected ? (
-                        <Check className="w-4 h-4 text-emerald-400 inline" />
+                        <Check className="w-4 h-4 text-emerald-500 inline" />
                       ) : (
-                        <XIcon className="w-4 h-4 text-gray-500 inline" />
+                        <XIcon className="w-4 h-4 text-[var(--muted-light)] inline" />
                       )}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                    <p className="text-xs text-[var(--muted-light)] mb-0.5 flex items-center gap-1">
                       <Clock className="w-3 h-3" /> Uptime
                     </p>
-                    <p className="text-sm font-medium text-gray-300">
+                    <p className="text-sm font-medium text-[var(--foreground)]">
                       {formatUptime(booth.uptime_seconds)}
                     </p>
                   </div>
                 </div>
 
                 {/* Last seen + event badge */}
-                <div className="mt-4 pt-3 border-t border-gray-700/30 flex items-center justify-between">
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                <div className="mt-4 pt-3 border-t border-[var(--card-border)] flex items-center justify-between">
+                  <p className="text-xs text-[var(--muted-light)] flex items-center gap-1">
                     <Eye className="w-3 h-3" />
                     {formatLastSeen(booth.last_seen)}
                   </p>
@@ -417,13 +417,13 @@ export default function DashboardPage() {
       >
         {apiKeyInfo && (
           <>
-            <div className="bg-gray-800 border border-amber-500/20 rounded-lg p-4 mb-4">
-              <p className="text-xs text-amber-400 mb-2 font-medium flex items-center gap-1.5">
+            <div className="bg-[var(--warning-light)] border border-amber-200 rounded-lg p-4 mb-4">
+              <p className="text-xs text-amber-700 mb-2 font-medium flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Deze key wordt maar één keer getoond!
               </p>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-sm text-white font-mono break-all bg-gray-900/50 p-2 rounded">
+                <code className="flex-1 text-sm text-[var(--foreground)] font-mono break-all bg-white p-2 rounded border border-amber-200">
                   {apiKeyInfo.api_key}
                 </code>
                 <button
@@ -431,7 +431,7 @@ export default function DashboardPage() {
                     navigator.clipboard.writeText(apiKeyInfo.api_key);
                     showToast("API key gekopieerd");
                   }}
-                  className="shrink-0 p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition"
+                  className="shrink-0 p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-gray-100 rounded-lg transition"
                   title="Kopieer"
                 >
                   <Copy className="w-4 h-4" />
@@ -439,9 +439,9 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-1">Configureer in booth.toml:</p>
-              <code className="text-xs text-gray-300 font-mono">
+            <div className="bg-gray-50 rounded-lg p-3 border border-[var(--card-border)]">
+              <p className="text-xs text-[var(--muted)] mb-1">Configureer in booth.toml:</p>
+              <code className="text-xs text-[var(--foreground)] font-mono">
                 [server]<br />
                 booth_id = &quot;{apiKeyInfo.booth_id}&quot;<br />
                 api_key = &quot;{apiKeyInfo.api_key}&quot;

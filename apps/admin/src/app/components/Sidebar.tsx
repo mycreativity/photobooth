@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
 import { useSidebar } from "./AppShell";
-import { Camera, CalendarDays, ChevronsLeft, LogOut } from "lucide-react";
+import { Camera, CalendarDays, ChevronsLeft, LogOut, X } from "lucide-react";
 
 interface UserInfo {
   email: string;
@@ -33,7 +33,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<UserInfo | null>(null);
-  const { collapsed, setCollapsed } = useSidebar();
+  const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar();
 
   useEffect(() => {
     if (!isLoggedIn()) return;
@@ -55,28 +55,37 @@ export default function Sidebar() {
     return pathname.startsWith(href);
   }
 
+  function handleNavClick(href: string) {
+    setMobileOpen(false);
+    router.push(href);
+  }
+
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen z-20 flex flex-col bg-gray-950/80 backdrop-blur-xl border-r border-gray-800/50 transition-all duration-300 ${
-        collapsed ? "w-[68px]" : "w-[240px]"
-      }`}
+      className={`
+        fixed top-0 left-0 h-screen z-40 flex flex-col
+        bg-white border-r border-[var(--sidebar-border)]
+        transition-all duration-300
+        ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+        lg:translate-x-0
+        ${collapsed ? "lg:w-[68px]" : "lg:w-[260px]"}
+        w-[280px]
+      `}
     >
       {/* Brand */}
-      <div className="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-gray-800/50">
-        <div className="w-9 h-9 rounded-xl bg-violet-600/20 flex items-center justify-center shrink-0">
-          <Camera className="w-4.5 h-4.5 text-violet-400" />
-        </div>
+      <div className="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-[var(--sidebar-border)]">
         {!collapsed && (
-          <div className="min-w-0">
-            <h1 className="text-sm font-bold text-white truncate">
-              Photobooth
-            </h1>
-            <p className="text-[10px] text-gray-500 truncate">Admin Panel</p>
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src="/loomo-logo-dark.png" alt="LOOMO" className="h-7" />
+        )}
+        {collapsed && (
+          <div className="w-9 h-9 rounded-xl bg-[var(--accent-light)] flex items-center justify-center shrink-0">
+            <Camera className="w-4.5 h-4.5 text-[var(--accent-dark)]" />
           </div>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className={`ml-auto p-1.5 text-gray-500 hover:text-white hover:bg-gray-800/50 rounded-lg transition ${
+          className={`hidden lg:flex ml-auto p-1.5 text-[var(--muted-light)] hover:text-[var(--foreground)] hover:bg-gray-100 rounded-lg transition ${
             collapsed ? "mx-auto ml-0" : ""
           }`}
           title={collapsed ? "Uitklappen" : "Inklappen"}
@@ -87,6 +96,13 @@ export default function Sidebar() {
             }`}
           />
         </button>
+        {/* Mobile close */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden ml-auto p-1.5 text-[var(--muted)] hover:text-[var(--foreground)] rounded-lg transition"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -95,25 +111,25 @@ export default function Sidebar() {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
-            <a
+            <button
               key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
+              onClick={() => handleNavClick(item.href)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 active
-                  ? "bg-violet-600/15 text-violet-300 border border-violet-500/20"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800/50 border border-transparent"
+                  ? "bg-[var(--accent-light)] text-[var(--accent-dark)] border border-[var(--accent)]/20"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-gray-50 border border-transparent"
               }`}
               title={collapsed ? item.label : undefined}
             >
               <Icon className="w-[18px] h-[18px] shrink-0" />
               {!collapsed && <span>{item.label}</span>}
-            </a>
+            </button>
           );
         })}
       </nav>
 
       {/* User account — bottom */}
-      <div className="shrink-0 border-t border-gray-800/50 p-3">
+      <div className="shrink-0 border-t border-[var(--sidebar-border)] p-3">
         {user ? (
           <div
             className={`flex items-center gap-3 ${
@@ -122,7 +138,7 @@ export default function Sidebar() {
           >
             {/* Avatar */}
             <div
-              className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 cursor-pointer"
+              className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--warm)] to-[var(--accent)] flex items-center justify-center shrink-0 cursor-pointer"
               title={user.email}
             >
               <span className="text-xs font-bold text-white">
@@ -132,10 +148,10 @@ export default function Sidebar() {
 
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">
+                <p className="text-sm text-[var(--foreground)] font-medium truncate">
                   {user.name || user.email.split("@")[0]}
                 </p>
-                <p className="text-[10px] text-gray-500 truncate">
+                <p className="text-[10px] text-[var(--muted-light)] truncate">
                   {user.email}
                 </p>
               </div>
@@ -144,7 +160,7 @@ export default function Sidebar() {
             {!collapsed && (
               <button
                 onClick={handleLogout}
-                className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition shrink-0"
+                className="p-1.5 text-[var(--muted-light)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)] rounded-lg transition shrink-0"
                 title="Uitloggen"
               >
                 <LogOut className="w-4 h-4" />
@@ -153,14 +169,14 @@ export default function Sidebar() {
           </div>
         ) : (
           <div className="flex items-center justify-center py-2">
-            <div className="w-9 h-9 rounded-full bg-gray-800 animate-pulse" />
+            <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse" />
           </div>
         )}
 
         {collapsed && user && (
           <button
             onClick={handleLogout}
-            className="w-full mt-2 p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition flex items-center justify-center"
+            className="w-full mt-2 p-1.5 text-[var(--muted-light)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)] rounded-lg transition flex items-center justify-center"
             title="Uitloggen"
           >
             <LogOut className="w-4 h-4" />

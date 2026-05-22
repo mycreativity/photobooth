@@ -14,7 +14,7 @@ const sizes = {
 export default function Spinner({ size = "md", className = "" }: SpinnerProps) {
   return (
     <Loader2
-      className={`animate-spin text-violet-500 ${sizes[size]} ${className}`}
+      className={`animate-spin text-[var(--accent)] ${sizes[size]} ${className}`}
     />
   );
 }

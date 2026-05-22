@@ -19,23 +19,23 @@ export default function PageHeader({
   badge,
 }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between mb-8">
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
       <div className="flex items-center gap-3">
         {backHref && (
           <a
             href={backHref}
-            className="p-1.5 -ml-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition"
+            className="p-1.5 -ml-1.5 text-[var(--muted-light)] hover:text-[var(--foreground)] hover:bg-gray-100 rounded-lg transition"
           >
             <ChevronLeft className="w-5 h-5" />
           </a>
         )}
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">{title}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--foreground)]">{title}</h1>
             {badge}
           </div>
           {subtitle && (
-            <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
+            <p className="text-[var(--muted)] text-sm mt-0.5">{subtitle}</p>
           )}
         </div>
       </div>

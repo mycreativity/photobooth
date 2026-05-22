@@ -53,16 +53,16 @@ function formatLastSeen(iso: string | null): string {
   return d.toLocaleString("nl-NL");
 }
 
-function ProgressBar({ percent, color = "violet" }: { percent: number; color?: string }) {
+function ProgressBar({ percent, color = "teal" }: { percent: number; color?: string }) {
   const colorMap: Record<string, string> = {
-    violet: "bg-violet-500",
+    teal: "bg-[var(--accent)]",
     emerald: "bg-emerald-500",
     amber: "bg-amber-500",
     red: "bg-red-500",
   };
-  const barColor = percent > 85 ? colorMap.red : percent > 60 ? colorMap.amber : colorMap[color] || colorMap.violet;
+  const barColor = percent > 85 ? colorMap.red : percent > 60 ? colorMap.amber : colorMap[color] || colorMap.teal;
   return (
-    <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden mt-1">
+    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mt-1">
       <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${Math.min(percent, 100)}%` }} />
     </div>
   );
@@ -185,7 +185,7 @@ export default function BoothDetailPage({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-[var(--accent)]/30 border-t-[var(--accent)] rounded-full animate-spin" />
       </div>
     );
   }
@@ -193,14 +193,13 @@ export default function BoothDetailPage({
   if (error || !booth) {
     return (
       <div className="text-center py-20">
-        <p className="text-red-400 mb-4">{error || "Booth not found"}</p>
-        <button onClick={() => router.push("/")} className="px-6 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition">← Terug</button>
+        <p className="text-[var(--danger)] mb-4">{error || "Booth not found"}</p>
+        <button onClick={() => router.push("/")} className="px-6 py-2 bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white rounded-xl transition">← Terug</button>
       </div>
     );
   }
 
   const isOnline = booth.status === "online";
-  const settings = booth.settings || {};
 
   return (
     <div className="space-y-6">
@@ -210,12 +209,12 @@ export default function BoothDetailPage({
         backHref="/"
         badge={
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" : "bg-gray-600"}`} />
-            <span className="text-sm text-gray-300">{isOnline ? "Online" : "Offline"}</span>
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" : "bg-gray-300"}`} />
+            <span className="text-sm text-[var(--muted)]">{isOnline ? "Online" : "Offline"}</span>
           </div>
         }
         actions={
-          <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg border border-gray-700/30 transition" title="Refresh">↻</button>
+          <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] bg-white hover:bg-gray-50 rounded-lg border border-[var(--card-border)] transition" title="Refresh">↻</button>
         }
       />
 
@@ -223,7 +222,7 @@ export default function BoothDetailPage({
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <MetricCard label="CPU" value={`${booth.cpu_percent ?? 0}%`} sub={<ProgressBar percent={booth.cpu_percent ?? 0} />} />
           <MetricCard label="Temperatuur" value={booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} color={booth.cpu_temp && booth.cpu_temp > 70 ? "red" : booth.cpu_temp && booth.cpu_temp > 55 ? "amber" : "emerald"} />
-          <MetricCard label="Geheugen" value={`${booth.mem_used_mb} / ${booth.mem_total_mb} MB`} sub={<ProgressBar percent={booth.mem_percent} color="violet" />} />
+          <MetricCard label="Geheugen" value={`${booth.mem_used_mb} / ${booth.mem_total_mb} MB`} sub={<ProgressBar percent={booth.mem_percent} color="teal" />} />
           <MetricCard label="Schijf" value={`${booth.disk_used_gb} / ${booth.disk_total_gb} GB`} sub={<ProgressBar percent={booth.disk_percent} color="emerald" />} />
         <MetricCard label="Uptime" value={formatUptime(booth.uptime_seconds)} />
       </div>
@@ -232,8 +231,8 @@ export default function BoothDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* Device info */}
-          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">📋 Apparaat</h2>
+          <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">📋 Apparaat</h2>
             <dl className="space-y-3">
               <InfoRow label="Booth ID" value={booth.booth_id} />
               <InfoRow label="Naam" value={booth.name || "—"} />
@@ -248,19 +247,19 @@ export default function BoothDetailPage({
           </div>
 
           {/* Live camera */}
-          <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+          <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">📷 Camera</h2>
+              <h2 className="text-lg font-semibold text-[var(--foreground)]">📷 Camera</h2>
               <button onClick={togglePreview} disabled={!isOnline}
-                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${previewing ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30" : "bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 border border-violet-500/30"} disabled:opacity-30 disabled:cursor-not-allowed`}>
+                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${previewing ? "bg-[var(--danger-light)] text-[var(--danger)] hover:bg-red-100 border border-red-200" : "bg-[var(--accent-light)] text-[var(--accent-dark)] hover:bg-teal-100 border border-teal-200"} disabled:opacity-30 disabled:cursor-not-allowed`}>
                 {previewing ? "⏹ Stop" : "▶ Live"}
               </button>
             </div>
-            <div className="aspect-video bg-gray-900/50 rounded-xl overflow-hidden flex items-center justify-center">
+            <div className="aspect-video bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center border border-[var(--card-border)]">
               {lastFrame ? (
                 <img src={lastFrame} alt="Live camera feed" className="w-full h-full object-contain" />
               ) : (
-                <div className="text-center text-gray-600">
+                <div className="text-center text-[var(--muted-light)]">
                   <p className="text-3xl mb-2">📷</p>
                   <p className="text-sm">{isOnline ? "Klik ▶ voor live preview" : "Booth is offline"}</p>
                 </div>
@@ -269,31 +268,31 @@ export default function BoothDetailPage({
           </div>
 
           {/* Settings Editor */}
-          <SettingsPanel settings={settings} boothId={boothId} isOnline={isOnline} onSaved={fetchBooth} />
+          <SettingsPanel settings={booth.settings || {}} boothId={boothId} isOnline={isOnline} onSaved={fetchBooth} />
         </div>
 
         {/* Log panel — full width */}
-        <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+        <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-white">📜 Logs</h2>
+            <h2 className="text-lg font-semibold text-[var(--foreground)]">📜 Logs</h2>
             <div className="flex items-center gap-3">
-              <span className={`flex items-center gap-1.5 text-xs ${logStreaming ? "text-emerald-400" : "text-gray-500"}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${logStreaming ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`} />
+              <span className={`flex items-center gap-1.5 text-xs ${logStreaming ? "text-emerald-600" : "text-[var(--muted-light)]"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${logStreaming ? "bg-emerald-500 animate-pulse" : "bg-gray-300"}`} />
                 {logStreaming ? "Live" : "Offline"}
               </span>
-              <button onClick={() => { setLogs([]); fetchInitialLogs(); }} className="text-xs text-gray-500 hover:text-gray-300 transition">Clear</button>
+              <button onClick={() => { setLogs([]); fetchInitialLogs(); }} className="text-xs text-[var(--muted-light)] hover:text-[var(--foreground)] transition">Clear</button>
             </div>
           </div>
-          <div className="bg-gray-950/50 rounded-xl p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin">
+          <div className="bg-gray-50 rounded-xl p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin border border-[var(--card-border)]">
             {logs.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">Geen logs beschikbaar</p>
+              <p className="text-[var(--muted-light)] text-center py-8">Geen logs beschikbaar</p>
             ) : (
               logs.map((log, i) => (
-                <div key={i} className="flex gap-2 py-0.5 hover:bg-gray-800/30">
-                  <span className="text-gray-600 shrink-0 w-20">{log.ts ? new Date(log.ts).toLocaleTimeString("nl-NL") : ""}</span>
+                <div key={i} className="flex gap-2 py-0.5 hover:bg-gray-100 rounded">
+                  <span className="text-[var(--muted-light)] shrink-0 w-20">{log.ts ? new Date(log.ts).toLocaleTimeString("nl-NL") : ""}</span>
                   <LogLevel level={log.level} />
-                  <span className="text-gray-500 shrink-0 w-28 truncate" title={log.logger}>{log.logger?.split(".").pop()}</span>
-                  <span className="text-gray-300 break-all">{log.message}</span>
+                  <span className="text-[var(--muted-light)] shrink-0 w-28 truncate" title={log.logger}>{log.logger?.split(".").pop()}</span>
+                  <span className="text-[var(--foreground)] break-all">{log.message}</span>
                 </div>
               ))
             )}
@@ -304,12 +303,12 @@ export default function BoothDetailPage({
   );
 }
 
-function MetricCard({ label, value, sub, color = "violet" }: { label: string; value: string; sub?: React.ReactNode; color?: string }) {
-  const colorMap: Record<string, string> = { emerald: "text-emerald-400", red: "text-red-400", amber: "text-amber-400", violet: "text-violet-300", gray: "text-gray-400" };
+function MetricCard({ label, value, sub, color = "teal" }: { label: string; value: string; sub?: React.ReactNode; color?: string }) {
+  const colorMap: Record<string, string> = { emerald: "text-emerald-600", red: "text-red-600", amber: "text-amber-600", teal: "text-[var(--accent-dark)]", gray: "text-[var(--muted)]" };
   return (
-    <div className="bg-gray-800/30 border border-gray-700/30 rounded-xl p-4">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`text-lg font-semibold ${colorMap[color] || colorMap.violet}`}>{value}</p>
+    <div className="bg-white border border-[var(--card-border)] rounded-xl p-4 shadow-sm">
+      <p className="text-xs text-[var(--muted-light)] mb-1">{label}</p>
+      <p className={`text-lg font-semibold ${colorMap[color] || colorMap.teal}`}>{value}</p>
       {sub}
     </div>
   );
@@ -318,19 +317,19 @@ function MetricCard({ label, value, sub, color = "violet" }: { label: string; va
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-start gap-2">
-      <dt className="text-sm text-gray-500 shrink-0">{label}</dt>
-      <dd className="text-sm text-gray-300 font-medium text-right break-all">{value}</dd>
+      <dt className="text-sm text-[var(--muted)]">{label}</dt>
+      <dd className="text-sm text-[var(--foreground)] font-medium text-right break-all">{value}</dd>
     </div>
   );
 }
 
 function LogLevel({ level }: { level: string }) {
   const colors: Record<string, string> = {
-    DEBUG: "text-gray-500",
-    INFO: "text-blue-400",
-    WARNING: "text-amber-400",
-    ERROR: "text-red-400",
-    CRITICAL: "text-red-300 font-bold",
+    DEBUG: "text-gray-400",
+    INFO: "text-blue-600",
+    WARNING: "text-amber-600",
+    ERROR: "text-red-600",
+    CRITICAL: "text-red-700 font-bold",
   };
   return (
     <span className={`shrink-0 w-14 ${colors[level] || colors.INFO}`}>
@@ -400,24 +399,24 @@ function SettingsPanel({
     }
   }
 
-  const inputClass = "w-full bg-gray-900/50 border border-gray-700/40 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-violet-500/50 focus:outline-none transition";
-  const labelClass = "text-xs text-gray-500 mb-0.5";
+  const inputClass = "w-full bg-white border border-[var(--input-border)] rounded-lg px-3 py-1.5 text-sm text-[var(--foreground)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 focus:outline-none transition";
+  const labelClass = "text-xs text-[var(--muted)] mb-0.5";
 
   if (Object.keys(settings).length === 0) {
     return (
-      <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4">⚙️ Instellingen</h2>
-        <p className="text-gray-500 text-sm">Wachten op heartbeat data...</p>
+      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">⚙️ Instellingen</h2>
+        <p className="text-[var(--muted)] text-sm">Wachten op heartbeat data...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-800/30 border border-gray-700/30 rounded-2xl p-6">
+    <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-white">⚙️ Instellingen</h2>
+        <h2 className="text-lg font-semibold text-[var(--foreground)]">⚙️ Instellingen</h2>
         {status && (
-          <span className={`text-xs px-2 py-0.5 rounded ${status.type === "ok" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+          <span className={`text-xs px-2 py-0.5 rounded ${status.type === "ok" ? "bg-[var(--success-light)] text-emerald-700" : "bg-[var(--danger-light)] text-[var(--danger)]"}`}>
             {status.msg}
           </span>
         )}
@@ -450,7 +449,7 @@ function SettingsPanel({
           </div>
         </div>
 
-        <div className="border-t border-gray-700/30 my-1" />
+        <div className="border-t border-[var(--card-border)] my-1" />
 
         {/* Camera */}
         <div className="grid grid-cols-2 gap-3">
@@ -478,7 +477,7 @@ function SettingsPanel({
           </div>
         </div>
 
-        <div className="border-t border-gray-700/30 my-1" />
+        <div className="border-t border-[var(--card-border)] my-1" />
 
         {/* Countdown */}
         <div className="grid grid-cols-2 gap-3">
@@ -492,13 +491,13 @@ function SettingsPanel({
           </div>
         </div>
 
-        <div className="border-t border-gray-700/30 my-1" />
+        <div className="border-t border-[var(--card-border)] my-1" />
 
         {/* LEDs */}
         <div className="grid grid-cols-2 gap-3">
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="led-toggle" className="accent-violet-500" checked={!!form.led_enabled} onChange={e => update("led_enabled", e.target.checked)} />
-            <label htmlFor="led-toggle" className="text-sm text-gray-400">LEDs aan</label>
+            <input type="checkbox" id="led-toggle" className="accent-[var(--accent)]" checked={!!form.led_enabled} onChange={e => update("led_enabled", e.target.checked)} />
+            <label htmlFor="led-toggle" className="text-sm text-[var(--muted)]">LEDs aan</label>
           </div>
           <div>
             <label className={labelClass}>Helderheid (0-255)</label>
@@ -510,11 +509,11 @@ function SettingsPanel({
       {/* Action buttons */}
       <div className="flex gap-2 mt-5">
         <button onClick={save} disabled={!isOnline || saving}
-          className="flex-1 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
+          className="flex-1 py-2 text-sm font-medium bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
           {saving ? "Opslaan..." : "💾 Opslaan"}
         </button>
         <button onClick={restart} disabled={!isOnline}
-          className="px-4 py-2 text-sm font-medium bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
+          className="px-4 py-2 text-sm font-medium bg-[var(--warning-light)] hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
           🔄 Herstart
         </button>
       </div>

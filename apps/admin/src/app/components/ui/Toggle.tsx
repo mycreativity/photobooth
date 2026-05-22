@@ -16,8 +16,8 @@ export default function Toggle({ checked, onChange, label, className = "" }: Tog
         className={`
           relative inline-flex h-5 w-9 shrink-0 cursor-pointer
           rounded-full border-2 border-transparent transition-colors
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
-          ${checked ? "bg-violet-600" : "bg-gray-700"}
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]
+          ${checked ? "bg-[var(--accent)]" : "bg-gray-300"}
         `}
       >
         <span
@@ -28,7 +28,7 @@ export default function Toggle({ checked, onChange, label, className = "" }: Tog
           `}
         />
       </button>
-      {label && <span className="text-sm text-gray-300">{label}</span>}
+      {label && <span className="text-sm text-[var(--foreground)]">{label}</span>}
     </div>
   );
 }

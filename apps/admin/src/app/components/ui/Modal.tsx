@@ -29,21 +29,21 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
       <div
-        className={`bg-gray-900 border border-gray-700/50 rounded-xl w-full ${widths[maxWidth]} shadow-2xl`}
+        className={`bg-white border border-[var(--card-border)] rounded-xl w-full ${widths[maxWidth]} shadow-xl`}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4">
           <div>
-            <h3 className="text-base font-semibold text-white">{title}</h3>
+            <h3 className="text-base font-semibold text-[var(--foreground)]">{title}</h3>
             {description && (
-              <p className="text-sm text-gray-400 mt-0.5">{description}</p>
+              <p className="text-sm text-[var(--muted)] mt-0.5">{description}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition -mt-1"
+            className="p-1 text-[var(--muted-light)] hover:text-[var(--foreground)] hover:bg-gray-100 rounded-lg transition -mt-1"
           >
             <X className="w-4 h-4" />
           </button>
@@ -54,7 +54,7 @@ export default function Modal({
 
         {/* Actions */}
         {actions && (
-          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-800/50">
+          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[var(--card-border)]">
             {actions}
           </div>
         )}
