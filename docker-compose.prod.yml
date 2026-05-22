@@ -30,4 +30,3 @@ services:
     environment:
       - HOSTNAME=0.0.0.0
       - API_URL=http://api:8000
-      - NEXT_PUBLIC_API_URL=https://photobooth-api.mycreativity.nl

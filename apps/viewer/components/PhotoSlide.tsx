@@ -16,7 +16,7 @@ export function PhotoSlide({ photo }: PhotoSlideProps) {
     <div className={`${styles.slide} ${isLayout ? styles.layout : ""}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`${process.env.NEXT_PUBLIC_API_URL || "/api"}${photo.url}`}
+        src={`/api${photo.url}`}
         alt={isLayout ? "Foto strip" : `Foto ${photo.seq}`}
         className={styles.image}
         draggable={false}

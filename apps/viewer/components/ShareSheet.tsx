@@ -21,7 +21,7 @@ interface ShareSheetProps {
 export function ShareSheet({ photo, eventName, open, onClose }: ShareSheetProps) {
   const [toast, setToast] = useState<string | null>(null);
   const isLayout = photo.variant === "print";
-  const photoUrl = `${process.env.NEXT_PUBLIC_API_URL || "/api"}${photo.url}`;
+  const photoUrl = `/api${photo.url}`;
   const filename = isLayout ? "photobooth_strip.jpg" : `photobooth_${photo.seq}.jpg`;
   const title = isLayout ? `Photobooth strip — ${eventName}` : `Photobooth foto — ${eventName}`;
 
