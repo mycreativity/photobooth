@@ -11,6 +11,7 @@ User stories worden beheerd in `_backlog/`. Volg altijd dit proces wanneer je al
 3. Update het `Status:` veld in het bestand naar `✅ Done`
 4. Log de afronding in de "Conversatie Log" van de story
 5. Maak een `walkthrough.md` artifact aan (gebruik `write_to_file` of `replace_file_content` met `IsArtifact: true` en `ArtifactType: 'walkthrough'`) om je gemaakte werk en testresultaten te presenteren aan de gebruiker.
+6. Push de feature branch: `git push origin story/XXX-naam`. Meld de branch naam aan de gebruiker zodat zij de PR kunnen aanmaken. **Nooit** direct naar `main` pushen (zie `.agents/rules/git-workflow.md`).
 
 ### Regels voor Antigravity
 

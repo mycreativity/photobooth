@@ -12,8 +12,9 @@ User stories worden beheerd in `_backlog/`. Volg altijd dit proces wanneer je al
 4. Update het `Status:` veld in het bestand naar `🔨 In Progress`
 5. Schakel over naar Planning Mode: Maak een `implementation_plan.md` artifact aan (gebruik `write_to_file` met `IsArtifact: true`, `ArtifactType: 'implementation_plan'` en `RequestFeedback: true`).
 6. Wacht op goedkeuring van de gebruiker op het plan.
-7. Na goedkeuring: Maak een `task.md` artifact aan met de acceptance criteria en taken uit de story.
-8. Begin met bouwen en werk de `task.md` continu bij (markeer met `[/]` en `[x]`).
+7. Na goedkeuring: maak een feature branch aan met `git checkout -b story/XXX-korte-naam`. Alle commits gaan op deze branch — **nooit op main** (zie `.agents/rules/git-workflow.md`).
+8. Maak een `task.md` artifact aan met de acceptance criteria en taken uit de story.
+9. Begin met bouwen en werk de `task.md` continu bij (markeer met `[/]` en `[x]`).
 
 ### Regels voor Antigravity
 

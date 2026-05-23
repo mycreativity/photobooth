@@ -16,7 +16,8 @@ For each question:
 1. **Ask the question** — one at a time, never stack multiple questions
 2. **Give your recommended answer** — be direct, explain the reasoning briefly
 3. **Wait for the user's response** — accept, reject, or modify
-4. **Move to the next branch** — only after the current one is resolved
+4. **Prioritize user questions** — if the user asks a question outside the current branch, answer it first before continuing the grill
+5. **Move to the next branch** — only after the current one is resolved
 
 If a question can be answered by exploring the codebase or existing documentation, do that first instead of asking.
 
