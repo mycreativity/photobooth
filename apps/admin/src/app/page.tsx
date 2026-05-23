@@ -213,7 +213,6 @@ export default function DashboardPage() {
         subtitle={`${booths.length} booth${booths.length !== 1 ? "s" : ""} geregistreerd`}
         actions={
           <div className="flex items-center gap-3">
-            <Badge variant="success" dot>Live</Badge>
             <Button
               variant="primary"
               icon={<Plus />}
