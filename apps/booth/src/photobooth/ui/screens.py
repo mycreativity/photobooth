@@ -775,14 +775,18 @@ def _make_layout_preview(layout_id: str):
         photo_area_h = fh - bar_h - pad * 2
         slots = _CFG.get("layouts", {}).get(layout_id, {}).get("slots", [])
         with widget.canvas:
-            Color(0.85, 0.85, 0.82, 1)
             for slot in slots:
                 sw = slot["w"] / 100 * photo_area_w
                 sh = slot["h"] / 100 * photo_area_h
                 sx = fx + pad + slot["x"] / 100 * photo_area_w
                 # Kivy origin is bottom-left; slot y=0 is the TOP of the photo area
                 sy = fy + bar_h + pad + (1 - (slot["y"] + slot["h"]) / 100) * photo_area_h
+                # Light fill
+                Color(0.90, 0.90, 0.87, 1)
                 RoundedRectangle(pos=(sx, sy), size=(sw, sh), radius=[2])
+                # Visible outline so slots are clearly distinguishable
+                Color(0.60, 0.60, 0.57, 1)
+                Line(rectangle=(sx, sy, sw, sh), width=1.2)
 
     return _draw
 
