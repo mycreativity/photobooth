@@ -82,18 +82,6 @@ _FALLBACK_CONFIG: dict[str, Any] = {
                 {"x": 51.3, "y": 66.9, "w": 48.7, "h": 30.2},
             ],
         },
-        "grid": {
-            "photosNeeded": 6,
-            "photoRatio": 1.25,
-            "slots": [
-                {"x": 0, "y": 2.9, "w": 49.1, "h": 30.5},
-                {"x": 50.9, "y": 2.9, "w": 49.1, "h": 30.5},
-                {"x": 0, "y": 34.8, "w": 49.1, "h": 30.5},
-                {"x": 50.9, "y": 34.8, "w": 49.1, "h": 30.5},
-                {"x": 0, "y": 66.6, "w": 49.1, "h": 30.5},
-                {"x": 50.9, "y": 66.6, "w": 49.1, "h": 30.5},
-            ],
-        },
     },
 }
 
@@ -106,7 +94,7 @@ _CFG = _load_layout_config()
 
 PRINT_WIDTH: int = _CFG["canvas"]["width"]
 PRINT_HEIGHT: int = _CFG["canvas"]["height"]
-PHOTO_RATIO: float = _CFG["photoRatio"]
+PHOTO_RATIO: float = _CFG.get("photoRatio", 1.25)  # Per-layout ratios in _CFG["layouts"]
 PADDING: int = _CFG["padding"]
 OUTPUT_QUALITY: int = _CFG["outputQuality"]
 
@@ -205,7 +193,7 @@ def compose_print(
     """Compose a print-ready image for the given layout.
 
     Args:
-        layout: One of 'single', 'strip', 'grid'.
+        layout: One of 'single', 'strip'.
         photos: List of JPEG bytes (already cropped to 7:5).
         event_name: Event name for the branding bar.
         logo_path: Absolute path to the logo image file.

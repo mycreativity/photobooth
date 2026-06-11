@@ -23,8 +23,10 @@ photo_counter = "Photo {current} of {total}"
 [layout]
 title = "Choose a layout"
 single = "Single Shot"
+single_hint = "1 photo"
 strip = "Collage (3)"
-grid = "Photo Grid (4)"
+strip_hint = "3 photos"
+filter_hint = "Next you'll choose a style"
 
 [filter]
 title = "Choose your vibe"

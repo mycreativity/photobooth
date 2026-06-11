@@ -4,7 +4,7 @@ The booth follows a linear user journey per session::
 
     Idle → Layout → Filter → [Countdown → Capture] × N → Review → Idle
 
-Where N depends on the layout chosen (single=1, strip=3, grid=4).
+Where N depends on the layout chosen (single=1, strip=3).
 
 A persistent live-preview layer sits *behind* the screens so the camera
 feed (or an idle video loop) is always visible as a background.
@@ -220,12 +220,10 @@ SCREEN_FLOW = [
 # Layout options — determines photos_per_session
 LAYOUT_SINGLE = "single"
 LAYOUT_STRIP = "strip"
-LAYOUT_GRID = "grid"
 
 LAYOUT_PHOTO_COUNT = {
     LAYOUT_SINGLE: 1,
     LAYOUT_STRIP: 3,
-    LAYOUT_GRID: 6,
 }
 
 # Filter presets
@@ -644,6 +642,7 @@ class TouchCard(FloatLayout):
         callback,
         icon_text: str = "",
         icon_draw=None,
+        subtitle_text: str = "",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -651,8 +650,8 @@ class TouchCard(FloatLayout):
         self._icon_draw = icon_draw
 
         with self.canvas.before:
-            # Subtle transparency lets the camera preview peek through
-            bg_rgba = (*bg_color[:3], bg_color[3] * 0.8 if len(bg_color) > 3 else 0.8)
+            # Higher opacity for better contrast on kiosk screen
+            bg_rgba = (*bg_color[:3], bg_color[3] * 0.92 if len(bg_color) > 3 else 0.92)
             self._bg_color = Color(*bg_rgba)
             self._bg = RoundedRectangle(
                 pos=self.pos, size=self.size, radius=[20],
@@ -661,8 +660,8 @@ class TouchCard(FloatLayout):
 
         # Icon area — drawn via canvas or fallback text
         self._icon_widget = Widget(
-            size_hint=(0.6, 0.4),
-            pos_hint={"center_x": 0.5, "center_y": 0.62},
+            size_hint=(0.75, 0.55),
+            pos_hint={"center_x": 0.5, "center_y": 0.58},
         )
         self._icon_widget.bind(pos=self._draw_icon, size=self._draw_icon)
         self.add_widget(self._icon_widget)
@@ -674,24 +673,40 @@ class TouchCard(FloatLayout):
                 font_size="44sp",
                 bold=True,
                 color=text_color,
-                pos_hint={"center_x": 0.5, "center_y": 0.62},
+                pos_hint={"center_x": 0.5, "center_y": 0.58},
                 size_hint=(1, 1),
             )
             self.add_widget(self._icon_label)
 
+        label_cy = 0.15 if subtitle_text else 0.12
         self._label = Label(
             text=label_text,
-            font_size="16sp",
+            font_size="22sp",
             bold=True,
             color=text_color,
-            pos_hint={"center_x": 0.5, "center_y": 0.15},
-            size_hint=(0.9, 0.25),
+            pos_hint={"center_x": 0.5, "center_y": label_cy},
+            size_hint=(0.9, 0.15),
             text_size=(None, None),
             halign="center",
             valign="middle",
         )
         self._label.bind(size=lambda w, s: setattr(w, 'text_size', s))
         self.add_widget(self._label)
+
+        if subtitle_text:
+            subtitle_color = (*text_color[:3], 0.6)
+            self._subtitle = Label(
+                text=subtitle_text,
+                font_size="16sp",
+                color=subtitle_color,
+                pos_hint={"center_x": 0.5, "center_y": 0.05},
+                size_hint=(0.9, 0.12),
+                text_size=(None, None),
+                halign="center",
+                valign="middle",
+            )
+            self._subtitle.bind(size=lambda w, s: setattr(w, 'text_size', s))
+            self.add_widget(self._subtitle)
 
     def _update(self, *_args) -> None:
         self._bg.pos = self.pos
@@ -749,86 +764,32 @@ def _draw_print_frame(widget, x, y, w, h):
     return fx, fy, frame_w, frame_h, bar_h
 
 
-def _draw_single_icon(widget, x, y, w, h):
-    """Draw a single-photo print layout preview."""
-    fx, fy, fw, fh, bar_h = _draw_print_frame(widget, x, y, w, h)
-    pad = fw * 0.06
-    photo_area_h = fh - bar_h - pad * 2
-    # Single photo: 7:5 landscape, centered in area
-    photo_w = fw - pad * 2
-    photo_h = photo_w / 1.4
-    if photo_h > photo_area_h:
-        photo_h = photo_area_h
-        photo_w = photo_h * 1.4
-    px = fx + (fw - photo_w) / 2
-    py = fy + bar_h + (photo_area_h - photo_h) / 2 + pad
-    with widget.canvas:
-        Color(0.85, 0.85, 0.82, 1)
-        RoundedRectangle(pos=(px, py), size=(photo_w, photo_h), radius=[2])
+def _make_layout_preview(layout_id: str):
+    """Return an icon-draw callback that renders slot positions from card_layout.json."""
+    from photobooth.services.print_layouts import _CFG
+
+    def _draw(widget, x, y, w, h):
+        fx, fy, fw, fh, bar_h = _draw_print_frame(widget, x, y, w, h)
+        pad = fw * 0.06
+        photo_area_w = fw - pad * 2
+        photo_area_h = fh - bar_h - pad * 2
+        slots = _CFG.get("layouts", {}).get(layout_id, {}).get("slots", [])
+        with widget.canvas:
+            Color(0.85, 0.85, 0.82, 1)
+            for slot in slots:
+                sw = slot["w"] / 100 * photo_area_w
+                sh = slot["h"] / 100 * photo_area_h
+                sx = fx + pad + slot["x"] / 100 * photo_area_w
+                # Kivy origin is bottom-left; slot y=0 is the TOP of the photo area
+                sy = fy + bar_h + pad + (1 - (slot["y"] + slot["h"]) / 100) * photo_area_h
+                RoundedRectangle(pos=(sx, sy), size=(sw, sh), radius=[2])
+
+    return _draw
 
 
-def _draw_strip_icon(widget, x, y, w, h):
-    """Draw a strip print layout preview: 1 large + 2 small."""
-    fx, fy, fw, fh, bar_h = _draw_print_frame(widget, x, y, w, h)
-    pad = fw * 0.06
-    gap = pad * 0.6
-    photo_area_h = fh - bar_h - pad * 2
-    usable_w = fw - pad * 2
+_draw_layout_preview_single = _make_layout_preview("single")
+_draw_layout_preview_strip = _make_layout_preview("strip")
 
-    # Hero photo (full width)
-    hero_w = usable_w
-    hero_h = hero_w / 1.4
-    # Small photos (half width)
-    small_w = (usable_w - gap) / 2
-    small_h = small_w / 1.4
-    total_h = hero_h + gap + small_h
-    # Scale if needed
-    if total_h > photo_area_h:
-        scale = photo_area_h / total_h
-        hero_w *= scale; hero_h *= scale
-        small_w *= scale; small_h *= scale
-        total_h = hero_h + gap + small_h
-
-    start_y = fy + bar_h + pad + (photo_area_h - total_h) / 2
-    start_x = fx + pad + (usable_w - hero_w) / 2
-
-    with widget.canvas:
-        Color(0.85, 0.85, 0.82, 1)
-        # Hero
-        RoundedRectangle(pos=(start_x, start_y + gap + small_h), size=(hero_w, hero_h), radius=[2])
-        # Small left
-        sx = fx + pad + (usable_w - 2 * small_w - gap) / 2
-        RoundedRectangle(pos=(sx, start_y), size=(small_w, small_h), radius=[2])
-        # Small right
-        RoundedRectangle(pos=(sx + small_w + gap, start_y), size=(small_w, small_h), radius=[2])
-
-
-def _draw_grid_icon(widget, x, y, w, h):
-    """Draw a 2×2 grid print layout preview."""
-    fx, fy, fw, fh, bar_h = _draw_print_frame(widget, x, y, w, h)
-    pad = fw * 0.06
-    gap = pad * 0.6
-    photo_area_h = fh - bar_h - pad * 2
-    usable_w = fw - pad * 2
-
-    cell_w = (usable_w - gap) / 2
-    cell_h = cell_w / 1.4
-    total_h = cell_h * 2 + gap
-    if total_h > photo_area_h:
-        scale = photo_area_h / total_h
-        cell_w *= scale; cell_h *= scale
-        total_h = cell_h * 2 + gap
-
-    start_y = fy + bar_h + pad + (photo_area_h - total_h) / 2
-    start_x = fx + pad + (usable_w - 2 * cell_w - gap) / 2
-
-    with widget.canvas:
-        Color(0.85, 0.85, 0.82, 1)
-        for row in range(2):
-            for col in range(2):
-                cx = start_x + col * (cell_w + gap)
-                cy = start_y + row * (cell_h + gap)
-                RoundedRectangle(pos=(cx, cy), size=(cell_w, cell_h), radius=[2])
 
 
 def _draw_classic_icon(widget, x, y, w, h):
@@ -1307,7 +1268,7 @@ class IdleScreen(BaseBoothScreen):
 
 
 class LayoutScreen(BaseBoothScreen):
-    """Choose a photo layout: Single Shot, 3-Strip, or 4-Grid.
+    """Choose a photo layout: Single Shot or Collage (3 photos).
 
     The choice determines how many photos are taken per session.
     """
@@ -1324,23 +1285,23 @@ class LayoutScreen(BaseBoothScreen):
         )
         self.add_widget(title)
 
-        # Three layout cards side by side
+        # Two layout cards side by side
         cards_container = FloatLayout(
-            size_hint=(0.85, 0.5),
-            pos_hint={"center_x": 0.5, "center_y": 0.45},
+            size_hint=(0.72, 0.62),
+            pos_hint={"center_x": 0.5, "center_y": 0.47},
         )
 
-        card_w = 0.3
-        positions = [0.17, 0.5, 0.83]
+        card_w = 0.44
+        positions = [0.25, 0.75]
         layouts = [
-            (LAYOUT_SINGLE, self.t("layout.single"), _draw_single_icon),
-            (LAYOUT_STRIP, self.t("layout.strip"), _draw_strip_icon),
-            (LAYOUT_GRID, self.t("layout.grid"), _draw_grid_icon),
+            (LAYOUT_SINGLE, self.t("layout.single"), self.t("layout.single_hint"), _draw_layout_preview_single),
+            (LAYOUT_STRIP, self.t("layout.strip"), self.t("layout.strip_hint"), _draw_layout_preview_strip),
         ]
 
-        for (layout_id, label, draw_fn), cx in zip(layouts, positions):
+        for (layout_id, label, hint, draw_fn), cx in zip(layouts, positions):
             card = TouchCard(
                 label_text=label,
+                subtitle_text=hint,
                 bg_color=self.theme.colors.surface,
                 text_color=self.theme.colors.text,
                 callback=lambda lid=layout_id: self._select_layout(lid),
@@ -1352,11 +1313,48 @@ class LayoutScreen(BaseBoothScreen):
 
         self.add_widget(cards_container)
 
+        # Filter hint — always shown, filters are not event-dependent
+        filter_hint_color = (*self.theme.colors.text[:3], 0.55)
+        filter_hint = Label(
+            text=self.t("layout.filter_hint"),
+            font_size="18sp",
+            color=filter_hint_color,
+            pos_hint={"center_x": 0.5, "center_y": 0.10},
+            size_hint=(0.8, 0.08),
+            halign="center",
+            valign="middle",
+        )
+        filter_hint.bind(size=lambda w, s: setattr(w, "text_size", s))
+        self.add_widget(filter_hint)
+
+        # Back button — always visible, bottom-left
+        back_btn = Label(
+            text=self.t("common.back"),
+            font_size="18sp",
+            color=filter_hint_color,
+            pos_hint={"x": 0.03, "center_y": 0.06},
+            size_hint=(0.15, 0.08),
+            halign="left",
+            valign="middle",
+        )
+        back_btn.bind(size=lambda w, s: setattr(w, "text_size", s))
+        back_btn.bind(on_touch_down=self._on_back_touch)
+        self.add_widget(back_btn)
+
+    def _on_back_touch(self, widget, touch) -> bool:
+        if widget.collide_point(*touch.pos):
+            self.navigate_to(SCREEN_IDLE)
+            return True
+        return False
+
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
         # Start camera preview so users can see themselves
         if self.preview_layer:
             self.preview_layer.start_camera_preview()
+
+    def on_leave(self, *args) -> None:
+        super().on_leave(*args)
 
     def _select_layout(self, layout_id: str) -> None:
         _session.layout = layout_id
@@ -2674,6 +2672,9 @@ class ReviewScreen(BaseBoothScreen):
             logger.debug("No agent available — skipping upload")
             return
 
+        # Reset session token so QR code will show new session's token
+        agent.last_session_token = ""
+
         if not self.storage or not session.session_id:
             return
 
@@ -2841,29 +2842,34 @@ class DeliverScreen(BaseBoothScreen):
         ))
 
     def _generate_qr(self, qr_widget) -> None:
-        """Generate a QR code pointing to the public event gallery."""
+        """Generate a QR code pointing to the session viewer page."""
         try:
             import qrcode
 
             # Build URL from config
-            public_url = "https://booth.mycreativity.nl"
-            event_uid = ""
+            public_url = "https://photobooth.mycreativity.nl"
 
             if self.config and hasattr(self.config, "server"):
                 public_url = self.config.server.public_url or public_url
 
-            # Try to get event UID from storage
-            # Get event UID from agent (received from server)
+            # Get session token from agent (set after photo upload)
             from kivy.app import App
             app = App.get_running_app()
             agent = getattr(app, 'agent', None)
-            if agent and agent.server_event_uid:
-                event_uid = agent.server_event_uid
 
-            if event_uid:
-                url = f"{public_url}/e/{event_uid}"
+            session_token = ""
+            if agent and agent.last_session_token:
+                session_token = agent.last_session_token
+
+            if session_token:
+                # Direct link to this session's photos
+                url = f"{public_url}/s/{session_token}"
             else:
-                url = public_url
+                # Fallback: event gallery
+                event_uid = ""
+                if agent and agent.server_event_uid:
+                    event_uid = agent.server_event_uid
+                url = f"{public_url}/e/{event_uid}" if event_uid else public_url
 
             qr = qrcode.QRCode(
                 version=1,

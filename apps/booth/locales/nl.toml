@@ -23,8 +23,10 @@ photo_counter = "Foto {current} van {total}"
 [layout]
 title = "Kies een layout"
 single = "Enkele foto"
+single_hint = "1 foto"
 strip = "Collage (3)"
-grid = "Fotogrid (4)"
+strip_hint = "3 foto's"
+filter_hint = "Daarna kies je een stijl"
 
 [filter]
 title = "Kies een stijl"
