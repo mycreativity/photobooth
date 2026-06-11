@@ -12,6 +12,8 @@ Environment=DISPLAY=:0
 Environment=KIVY_WINDOW=sdl2
 Environment=KIVY_GL_BACKEND=gl
 Environment=PREVIEW_MAX_WIDTH=960
+ExecStartPre=-/usr/bin/pkill -f gvfs-gphoto2-volume-monitor
+ExecStartPre=/bin/sleep 1
 ExecStart={{ venv_dir }}/bin/python -m photobooth
 Restart=always
 RestartSec=3

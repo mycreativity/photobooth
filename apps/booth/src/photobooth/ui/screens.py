@@ -651,7 +651,7 @@ class TouchCard(FloatLayout):
 
         with self.canvas.before:
             # Higher opacity for better contrast on kiosk screen
-            bg_rgba = (*bg_color[:3], bg_color[3] * 0.92 if len(bg_color) > 3 else 0.92)
+            bg_rgba = (*bg_color[:3], bg_color[3] * 0.72 if len(bg_color) > 3 else 0.72)
             self._bg_color = Color(*bg_rgba)
             self._bg = RoundedRectangle(
                 pos=self.pos, size=self.size, radius=[20],
