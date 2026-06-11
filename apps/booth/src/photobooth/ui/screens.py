@@ -678,10 +678,10 @@ class TouchCard(FloatLayout):
             )
             self.add_widget(self._icon_label)
 
-        label_cy = 0.15 if subtitle_text else 0.12
+        label_cy = 0.19 if subtitle_text else 0.12
         self._label = Label(
             text=label_text,
-            font_size="22sp",
+            font_size="26sp",
             bold=True,
             color=text_color,
             pos_hint={"center_x": 0.5, "center_y": label_cy},
@@ -697,9 +697,9 @@ class TouchCard(FloatLayout):
             subtitle_color = (*text_color[:3], 0.6)
             self._subtitle = Label(
                 text=subtitle_text,
-                font_size="16sp",
+                font_size="19sp",
                 color=subtitle_color,
-                pos_hint={"center_x": 0.5, "center_y": 0.05},
+                pos_hint={"center_x": 0.5, "center_y": 0.12},
                 size_hint=(0.9, 0.12),
                 text_size=(None, None),
                 halign="center",
@@ -781,7 +781,7 @@ def _make_layout_preview(layout_id: str):
                 sx = fx + pad + slot["x"] / 100 * photo_area_w
                 # Kivy origin is bottom-left; slot y=0 is the TOP of the photo area
                 sy = fy + bar_h + pad + (1 - (slot["y"] + slot["h"]) / 100) * photo_area_h
-                Color(0.68, 0.68, 0.65, 1)
+                Color(0.50, 0.50, 0.48, 1)
                 RoundedRectangle(pos=(sx, sy), size=(sw, sh), radius=[2])
 
     return _draw
@@ -1317,7 +1317,7 @@ class LayoutScreen(BaseBoothScreen):
         filter_hint_color = (*self.theme.colors.text[:3], 0.55)
         filter_hint = Label(
             text=self.t("layout.filter_hint"),
-            font_size="18sp",
+            font_size="24sp",
             color=filter_hint_color,
             pos_hint={"center_x": 0.5, "center_y": 0.10},
             size_hint=(0.8, 0.08),
@@ -1327,19 +1327,47 @@ class LayoutScreen(BaseBoothScreen):
         filter_hint.bind(size=lambda w, s: setattr(w, "text_size", s))
         self.add_widget(filter_hint)
 
-        # Back button — always visible, bottom-left
-        back_btn = Label(
+        # Back button — always visible, bottom-left: triangle icon + label
+        back_container = FloatLayout(
+            size_hint=(0.18, 0.08),
+            pos_hint={"x": 0.02, "center_y": 0.06},
+        )
+        back_container.bind(on_touch_down=self._on_back_touch)
+
+        back_icon = Widget(
+            size_hint=(0.22, 1.0),
+            pos_hint={"x": 0, "center_y": 0.5},
+        )
+
+        def _draw_triangle(w, *_):
+            w.canvas.clear()
+            cx = w.x + w.width / 2
+            cy = w.y + w.height / 2
+            th = w.height * 0.38
+            tw = th * 0.75
+            with w.canvas:
+                Color(*filter_hint_color)
+                Triangle(points=[
+                    cx + tw / 2, cy + th / 2,
+                    cx + tw / 2, cy - th / 2,
+                    cx - tw / 2, cy,
+                ])
+
+        back_icon.bind(pos=_draw_triangle, size=_draw_triangle)
+        back_container.add_widget(back_icon)
+
+        back_label = Label(
             text=self.t("common.back"),
             font_size="18sp",
             color=filter_hint_color,
-            pos_hint={"x": 0.03, "center_y": 0.06},
-            size_hint=(0.15, 0.08),
+            pos_hint={"right": 1.0, "center_y": 0.5},
+            size_hint=(0.78, 1.0),
             halign="left",
             valign="middle",
         )
-        back_btn.bind(size=lambda w, s: setattr(w, "text_size", s))
-        back_btn.bind(on_touch_down=self._on_back_touch)
-        self.add_widget(back_btn)
+        back_label.bind(size=lambda w, s: setattr(w, "text_size", s))
+        back_container.add_widget(back_label)
+        self.add_widget(back_container)
 
     def _on_back_touch(self, widget, touch) -> bool:
         if widget.collide_point(*touch.pos):
