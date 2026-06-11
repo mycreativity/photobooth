@@ -102,11 +102,11 @@ class Typography:
 
     font_name: str = "Roboto"        # Kivy ships Roboto by default
     font_file: str = ""              # Path to TTF; empty = use Kivy built-in
-    title_size: str = "48sp"
-    subtitle_size: str = "22sp"
-    body_size: str = "18sp"
-    countdown_size: str = "120sp"
-    button_size: str = "20sp"
+    title_size: str = "56sp"
+    subtitle_size: str = "28sp"
+    body_size: str = "24sp"
+    countdown_size: str = "140sp"
+    button_size: str = "26sp"
 
 
 @dataclass(frozen=True)
@@ -185,9 +185,11 @@ THEME_CLASSIC = ThemeData(
     typography=Typography(
         font_name="PlayfairDisplay",
         font_file="assets/fonts/PlayfairDisplay-Regular.ttf",
-        title_size="48sp",
-        subtitle_size="22sp",
-        countdown_size="120sp",
+        title_size="56sp",
+        subtitle_size="28sp",
+        body_size="24sp",
+        countdown_size="140sp",
+        button_size="26sp",
     ),
     animation=AnimationStyle(
         transition_duration=0.3,

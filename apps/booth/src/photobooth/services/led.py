@@ -308,6 +308,7 @@ class LedService:
         colors = [CELEBRATE_GOLD, CELEBRATE_PINK, CELEBRATE_BLUE, CELEBRATE_GREEN]
         n, br = self._cfg.led_count, self._cfg.brightness
 
+        # Smooth fade in from current state
         start = self._current
         for f in range(20):
             if self._anim_stop.is_set():
@@ -315,10 +316,12 @@ class LedService:
             self._set_all(_lerp(start, colors[0], _ease(f / 20)), br)
             self._anim_stop.wait(0.025)
 
+        # Gentle rotating rainbow — wider bands, slower speed
         offset = 0
         while not self._anim_stop.is_set():
             cols = []
             for i in range(n):
+                # Wider bands: divide strip into len(colors) segments
                 pos = ((i + offset) % n) / n * len(colors)
                 idx = int(pos) % len(colors)
                 frac = pos - int(pos)
@@ -326,4 +329,4 @@ class LedService:
                 cols.append(_lerp(colors[idx], colors[nxt], _ease(frac)))
             self._set_per_led(cols, br)
             offset += 1
-            self._anim_stop.wait(0.05)
+            self._anim_stop.wait(0.08)  # Slower rotation (was 0.05)

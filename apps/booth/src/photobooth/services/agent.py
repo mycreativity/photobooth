@@ -47,6 +47,8 @@ class BoothAgent:
 
         # Server-assigned event info (received on registration)
         self.server_event_id: str = ""
+        # Last uploaded session token (for QR code)
+        self.last_session_token: str = ""
         self.server_event_uid: str = ""
 
         # Callbacks for commands from server
@@ -147,7 +149,27 @@ class BoothAgent:
                 "api_key": self._config.get("api_key", ""),
             }))
 
-            # Start heartbeat task and upload retry queue
+            # Wait for register ACK before starting heartbeats
+            # (server rejects messages from unauthenticated connections)
+            try:
+                ack_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                ack_msg = json.loads(ack_raw)
+                if ack_msg.get("type") == "ack":
+                    logger.info("Server ACK: %s", ack_msg.get("status"))
+                    if ack_msg.get("event_id"):
+                        self.server_event_id = ack_msg["event_id"]
+                        self.server_event_uid = ack_msg.get("event_uid", "")
+                        logger.info("Server event: id=%s uid=%s", self.server_event_id, self.server_event_uid)
+                elif ack_msg.get("type") == "auth_error":
+                    logger.error("Auth rejected: %s", ack_msg.get("reason"))
+                    return
+                else:
+                    logger.warning("Unexpected first message: %s", ack_msg.get("type"))
+            except asyncio.TimeoutError:
+                logger.warning("No ACK received within 10s — disconnecting")
+                return
+
+            # Now safe to start heartbeats and upload retry queue
             heartbeat_task = asyncio.create_task(self._heartbeat_loop(ws))
             retry_task = asyncio.create_task(self._retry_queue_loop())
 
@@ -163,7 +185,6 @@ class BoothAgent:
 
                     if msg_type == "ack":
                         logger.info("Server ACK: %s", msg.get("status"))
-                        # Store server event info if provided
                         if msg.get("event_id"):
                             self.server_event_id = msg["event_id"]
                             self.server_event_uid = msg.get("event_uid", "")
@@ -481,13 +502,19 @@ class BoothAgent:
 
         async def _do_uploads():
             for photo in photos:
-                await self._upload_photo(
+                result = await self._upload_photo(
                     file_path=photo["file_path"],
                     event_id=photo.get("event_id", ""),
                     session_id=photo.get("session_id", ""),
                     seq=photo.get("seq", 1),
                     variant=photo.get("variant", "final"),
                 )
+                # Capture session token from first successful upload
+                if result and not self.last_session_token:
+                    token = result.get("session_token", "")
+                    if token:
+                        self.last_session_token = token
+                        logger.info("Session token received: %s", token)
 
         try:
             self._loop.call_soon_threadsafe(

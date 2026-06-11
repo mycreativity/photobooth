@@ -6,8 +6,8 @@
 name = "Photobooth"
 event_name = ""                 # e.g. "Wedding Jan & Lisa" — groups all sessions
 fullscreen = true           # Set to true for kiosk mode on Pi
-width = 1024
-height = 600
+width = 1280
+height = 800
 fps = 30
 language = "nl"             # "nl" (Nederlands) or "en" (English)
 theme = "classic"           # See src/photobooth/ui/themes.py for options
@@ -57,10 +57,11 @@ flash_brightness = 255          # Max brightness for photo flash
 
 [server]
 enabled = true                          # Enable admin server connection
-url = "ws://192.168.0.109:8000"         # Server WS URL (LAN IP for dev)
-booth_id = "booth-001"                  # Unique booth identifier
-booth_name = "Photobooth 1"             # Human-readable name
-api_key = ""                            # Pre-shared API key (optional)
+url = "wss://photobooth-api.mycreativity.nl"
+booth_id = "booth-001"
+booth_name = "Photobooth 1"
+api_key = ""                            # Set on device — do not commit credentials
 heartbeat_interval = 10                 # Seconds between heartbeats
 reconnect_delay = 5                     # Initial reconnect delay (seconds)
 reconnect_max_delay = 60                # Max reconnect delay (exponential backoff)
+public_url = "https://photobooth.mycreativity.nl"  # Public gallery URL for QR codes
