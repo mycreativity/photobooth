@@ -3128,12 +3128,10 @@ class SettingsScreen(BaseBoothScreen):
         if card and card.get("event_name"):
             self._event_name_lbl.text = card.get("event_name", "")
             meta = []
-            if card.get("event_uid"):
-                meta.append("ID: " + str(card["event_uid"]))
             if card.get("display_date"):
                 meta.append(str(card["display_date"]))
-            if card.get("branding_text"):
-                meta.append(str(card["branding_text"]))
+            if card.get("event_uid"):
+                meta.append("ID: " + str(card["event_uid"]))
             self._event_meta_lbl.text = "\n".join(meta)
         else:
             self._event_name_lbl.text = self.t("event.no_event")
