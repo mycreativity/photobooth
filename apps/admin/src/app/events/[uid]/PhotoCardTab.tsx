@@ -176,7 +176,7 @@ export default function PhotoCardTab({
                 onClick={() => setPreviewLayout(key)}
                 className={`flex-1 text-[11px] font-medium py-1.5 rounded-md transition-all ${
                   previewLayout === key
-                    ? "bg-[var(--primary)] text-white"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
                     : "text-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
@@ -186,7 +186,7 @@ export default function PhotoCardTab({
           </div>
 
           <div
-            className="relative rounded-xl overflow-hidden border border-[var(--card-border)]"
+            className="relative rounded-xl overflow-hidden border border-[var(--card-border)] shadow-lg"
             style={{
               aspectRatio: `${CARD.canvas.width}/${CARD.canvas.height}`,
             }}
