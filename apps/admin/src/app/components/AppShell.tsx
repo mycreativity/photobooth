@@ -3,11 +3,9 @@
 import { createContext, useContext, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
-import { Menu } from "lucide-react";
+import Topbar from "./Topbar";
 
 const SidebarContext = createContext({
-  collapsed: false,
-  setCollapsed: (_: boolean) => {},
   mobileOpen: false,
   setMobileOpen: (_: boolean) => {},
 });
@@ -23,7 +21,6 @@ export function useSidebar() {
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Pages that should NOT show the sidebar
@@ -35,8 +32,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
-      <div className="flex min-h-screen bg-[var(--background)]">
+    <SidebarContext.Provider value={{ mobileOpen, setMobileOpen }}>
+      <div className="flex h-screen overflow-hidden bg-[var(--background)]">
         {/* Mobile overlay */}
         {mobileOpen && (
           <div
@@ -45,23 +42,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           />
         )}
         <Sidebar />
-        <main
-          className={`flex-1 min-h-screen transition-all duration-300 ${
-            collapsed ? "lg:ml-[68px]" : "lg:ml-[260px]"
-          }`}
-        >
-          {/* Mobile header */}
-          <div className="lg:hidden flex items-center gap-3 px-4 h-14 border-b border-[var(--card-border)] bg-white sticky top-0 z-20">
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="p-2 -ml-2 text-[var(--muted)] hover:text-[var(--foreground)] rounded-lg transition"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/loomo-logo-dark.png" alt="LOOMO" className="h-6" />
+        <main className="flex-1 lg:ml-[260px] flex flex-col h-screen overflow-hidden">
+          <Topbar />
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
           </div>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
         </main>
       </div>
     </SidebarContext.Provider>

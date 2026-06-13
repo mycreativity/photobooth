@@ -114,7 +114,7 @@ export default function EventsPage() {
             <button
               key={ev.id}
               onClick={() => router.push(`/events/${ev.uid}`)}
-              className="w-full text-left group bg-white hover:bg-gray-50 border border-[var(--card-border)] hover:border-gray-300 rounded-xl p-4 transition-all duration-200 shadow-sm hover:shadow"
+              className="w-full text-left group bg-white hover:bg-gray-50 border border-[var(--card-border)] hover:border-[var(--primary)]/40 rounded-xl p-4 transition-all duration-200"
             >
               <div className="flex items-center justify-between">
                 {/* Left: info */}

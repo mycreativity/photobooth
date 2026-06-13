@@ -31,7 +31,7 @@ export default function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
       <div
-        className={`bg-white border border-[var(--card-border)] rounded-xl w-full ${widths[maxWidth]} shadow-xl`}
+        className={`bg-white border border-[var(--card-border)] rounded-xl w-full ${widths[maxWidth]}`}
       >
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4">

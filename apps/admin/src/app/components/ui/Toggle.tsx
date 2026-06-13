@@ -23,7 +23,7 @@ export default function Toggle({ checked, onChange, label, className = "" }: Tog
         <span
           className={`
             pointer-events-none inline-block h-4 w-4 transform rounded-full
-            bg-white shadow-sm transition-transform
+            bg-white transition-transform
             ${checked ? "translate-x-4" : "translate-x-0"}
           `}
         />

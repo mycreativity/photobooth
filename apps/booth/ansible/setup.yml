@@ -246,8 +246,8 @@
         # Run kivy once to generate default config, then fix it
         {{ venv_dir }}/bin/python -c "from kivy.config import Config; Config.write()" 2>/dev/null || true
         # Fix graphics settings for kiosk mode
-        sed -i 's/^width = .*/width = 1024/' /home/{{ booth_user }}/.kivy/config.ini
-        sed -i 's/^height = .*/height = 600/' /home/{{ booth_user }}/.kivy/config.ini
+        sed -i 's/^width = .*/width = 1280/' /home/{{ booth_user }}/.kivy/config.ini
+        sed -i 's/^height = .*/height = 800/' /home/{{ booth_user }}/.kivy/config.ini
         sed -i 's/^position = .*/position = custom/' /home/{{ booth_user }}/.kivy/config.ini
         sed -i 's/^left = .*/left = 0/' /home/{{ booth_user }}/.kivy/config.ini
         sed -i 's/^top = .*/top = 0/' /home/{{ booth_user }}/.kivy/config.ini

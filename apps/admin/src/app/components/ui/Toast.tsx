@@ -54,7 +54,7 @@ export default function Toast({
         fixed bottom-6 left-1/2 -translate-x-1/2 z-50
         flex items-center gap-2.5
         ${typeStyles[type]} border
-        text-[var(--foreground)] text-sm px-4 py-2.5 rounded-lg shadow-lg
+        text-[var(--foreground)] text-sm px-4 py-2.5 rounded-lg
         transition-all duration-200
         ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}
       `}

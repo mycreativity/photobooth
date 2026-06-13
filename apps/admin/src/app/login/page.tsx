@@ -82,7 +82,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
           {step === "email" ? (
             <form onSubmit={requestOTP} className="space-y-4">
               <div>
@@ -102,7 +102,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 bg-[var(--accent)] hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--accent)]/20"
+                className="w-full py-3 px-4 bg-[var(--accent)] hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200"
               >
                 {loading ? "Verzenden..." : "Stuur login code →"}
               </button>
@@ -132,7 +132,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || code.length !== 6}
-                className="w-full py-3 px-4 bg-[var(--accent)] hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-[var(--accent)]/20"
+                className="w-full py-3 px-4 bg-[var(--accent)] hover:bg-[var(--accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200"
               >
                 {loading ? "Verifiëren..." : "Inloggen"}
               </button>

@@ -16,8 +16,8 @@
   vars:
     app_dir: /opt/photobooth
     venv_dir: /opt/photobooth/.venv
-    booth_user: pi
-    booth_group: pi
+    booth_user: photobooth
+    booth_group: photobooth
     local_repo: "{{ playbook_dir }}/.."
     repo_root: "{{ playbook_dir }}/../../.."
 
