@@ -2957,27 +2957,24 @@ class PrintScreen(BaseBoothScreen):
 
 
 class SettingsScreen(BaseBoothScreen):
-    """Minimal settings screen — black background, invisible 2×3 grid.
+    """Minimal settings screen — black background, screen-filling 2×3 grid.
 
-    Accessed via a 5s long-press from the idle screen. Only two grid cells
-    are populated:
+    Accessed via a 5s long-press from the idle screen. Three of the six grid
+    blocks are populated (the gridlines themselves stay invisible):
 
-      1. An info card for the currently coupled (active) event.
-      2. A button to restart the app.
+      1. Back button.
+      2. Info card for the event pushed from the admin (read from the cached
+         ``event_card.json``).
+      3. Restart-app button.
 
-    The remaining four cells are intentionally empty, reserved for future
-    controls. Booth configuration (language, theme, camera, countdown,
-    glamour) is no longer edited here — those values are still loaded from
-    TOML + SQLite at startup, so the rest of the app keeps working exactly
-    as before.
+    The remaining blocks are intentionally empty, reserved for future use.
+    Booth configuration is no longer edited here — values are still loaded
+    from TOML + SQLite at startup, so the rest of the app keeps working.
     """
-
-    # Centres for the 2×3 grid of square cells (no visible gridlines).
-    _COLS = (0.28, 0.50, 0.72)
-    _ROWS = (0.62, 0.30)
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_SETTINGS, **kwargs)
+        from kivy.uix.gridlayout import GridLayout
 
         # Opaque black background — hides the live camera preview that the
         # other screens show behind the screen manager.
@@ -2986,37 +2983,38 @@ class SettingsScreen(BaseBoothScreen):
             self._bg_rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._sync_bg, size=self._sync_bg)
 
-        # Back button (top-left) — exit without restarting.
-        self.add_widget(BoothButton(
+        # 2×3 grid of large blocks (gridlines invisible), slightly inset.
+        grid = GridLayout(
+            cols=3, rows=2, spacing=24, padding=12,
+            size_hint=(0.9, 0.84),
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
+        )
+        self.add_widget(grid)
+
+        # Block 1 — Back
+        grid.add_widget(BoothButton(
             text=self.t("settings.back"),
             theme=self.theme,
-            variant="ghost",
+            variant="primary",
             on_press=self._go_back,
-            size_hint=(0.16, 0.08),
-            pos_hint={"x": 0.03, "top": 0.97},
+            size_hint=(1, 1),
         ))
 
-        # ── Invisible 2×3 grid of square cells ─────────────────────────
-        cells = [(cx, cy) for cy in self._ROWS for cx in self._COLS]
+        # Block 2 — pushed-event info card
+        grid.add_widget(self._build_event_cell())
 
-        # Cell 1 — coupled-event info card.
-        self._event_card = self._make_cell(*cells[0])
-        self._build_event_card(self._event_card)
-        self.add_widget(self._event_card)
-
-        # Cell 2 — restart-app button (fills the square cell).
-        restart_cell = self._make_cell(*cells[1])
-        restart_cell.add_widget(BoothButton(
-            text="↺  Herstart app",
+        # Block 3 — Restart
+        grid.add_widget(BoothButton(
+            text="Herstart app",
             theme=self.theme,
-            variant="secondary",
+            variant="primary",
             on_press=self._restart_app,
             size_hint=(1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
         ))
-        self.add_widget(restart_cell)
 
-        # Cells 3–6 are intentionally empty (reserved for future controls).
+        # Blocks 4–6 — intentionally empty (reserved for future controls).
+        for _ in range(3):
+            grid.add_widget(Widget())
 
     # ---- layout helpers ---------------------------------------------------
 
@@ -3024,24 +3022,19 @@ class SettingsScreen(BaseBoothScreen):
         self._bg_rect.pos = self.pos
         self._bg_rect.size = self.size
 
-    def _make_cell(self, center_x: float, center_y: float) -> FloatLayout:
-        """A square grid cell (height tracks width), positioned by centre."""
-        cell = FloatLayout(
-            size_hint=(0.18, None),
-            pos_hint={"center_x": center_x, "center_y": center_y},
-        )
-        cell.bind(width=lambda inst, w: setattr(inst, "height", w))
-        return cell
+    def _build_event_cell(self) -> FloatLayout:
+        """A yellow (accent) block showing the pushed event's details."""
+        cell = FloatLayout(size_hint=(1, 1))
 
-    def _build_event_card(self, cell: FloatLayout) -> None:
-        """Draw the surface background + labels for the event info card."""
         with cell.canvas.before:
-            Color(*self.theme.colors.surface)
-            self._card_rect = RoundedRectangle(
-                pos=cell.pos, size=cell.size, radius=[16],
-            )
+            Color(*self.theme.colors.accent_glow)
+            self._card_glow = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[22])
+            Color(*self.theme.colors.accent)
+            self._card_rect = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[16])
 
         def _sync(*_a):
+            self._card_glow.pos = cell.pos
+            self._card_glow.size = cell.size
             self._card_rect.pos = cell.pos
             self._card_rect.size = cell.size
         cell.bind(pos=_sync, size=_sync)
@@ -3049,33 +3042,35 @@ class SettingsScreen(BaseBoothScreen):
         cell.add_widget(Label(
             text=self.t("event.current"),
             font_size=self.theme.typography.body_size,
-            color=self.theme.colors.text_muted,
+            color=(1, 1, 1, 0.8),
             halign="center", valign="middle",
-            size_hint=(0.86, 0.18),
-            pos_hint={"center_x": 0.5, "center_y": 0.82},
+            size_hint=(0.9, 0.16),
+            pos_hint={"center_x": 0.5, "center_y": 0.85},
         ))
 
         self._event_name_lbl = Label(
             text="",
             font_size=self.theme.typography.subtitle_size,
-            bold=True, color=self.theme.colors.primary_light,
+            bold=True, color=(1, 1, 1, 1),
             halign="center", valign="middle",
-            size_hint=(0.86, 0.34),
-            pos_hint={"center_x": 0.5, "center_y": 0.52},
+            size_hint=(0.9, 0.28),
+            pos_hint={"center_x": 0.5, "center_y": 0.60},
         )
         self._event_name_lbl.bind(size=self._event_name_lbl.setter("text_size"))
         cell.add_widget(self._event_name_lbl)
 
-        self._event_stats_lbl = Label(
+        self._event_meta_lbl = Label(
             text="",
-            font_size="15sp",
-            color=self.theme.colors.text_muted,
-            halign="center", valign="middle",
-            size_hint=(0.86, 0.18),
-            pos_hint={"center_x": 0.5, "center_y": 0.22},
+            font_size="16sp",
+            color=(1, 1, 1, 0.85),
+            halign="center", valign="top",
+            size_hint=(0.9, 0.38),
+            pos_hint={"center_x": 0.5, "center_y": 0.26},
         )
-        self._event_stats_lbl.bind(size=self._event_stats_lbl.setter("text_size"))
-        cell.add_widget(self._event_stats_lbl)
+        self._event_meta_lbl.bind(size=self._event_meta_lbl.setter("text_size"))
+        cell.add_widget(self._event_meta_lbl)
+
+        return cell
 
     # ---- lifecycle --------------------------------------------------------
 
@@ -3084,21 +3079,35 @@ class SettingsScreen(BaseBoothScreen):
         self._refresh_event_card()
 
     def _refresh_event_card(self) -> None:
-        """Show the currently coupled (active) event, if any."""
-        name = None
-        stats = ""
-        if self.storage:
-            active = self.storage.get_active_event()
-            if active:
-                name = active["name"]
-                sessions = self.storage.get_event_session_count(active["id"])
-                photos = self.storage.get_event_photo_count(active["id"])
-                stats = self.t(
-                    "event.event_stats",
-                    sessions=str(sessions), photos=str(photos),
-                )
-        self._event_name_lbl.text = name or self.t("event.no_event")
-        self._event_stats_lbl.text = stats
+        """Show the event pushed from the admin (cached in event_card.json)."""
+        import json
+        from pathlib import Path
+
+        data_dir = Path("/opt/photobooth/data")
+        if not data_dir.exists():
+            data_dir = Path("data")
+        card_path = data_dir / "event_card.json"
+
+        card = None
+        if card_path.exists():
+            try:
+                card = json.loads(card_path.read_text())
+            except Exception as e:
+                logger.warning("Could not read event_card.json: %s", e)
+
+        if card and card.get("event_name"):
+            self._event_name_lbl.text = card.get("event_name", "")
+            meta = []
+            if card.get("event_uid"):
+                meta.append("ID: " + str(card["event_uid"]))
+            if card.get("display_date"):
+                meta.append(str(card["display_date"]))
+            if card.get("branding_text"):
+                meta.append(str(card["branding_text"]))
+            self._event_meta_lbl.text = "\n".join(meta)
+        else:
+            self._event_name_lbl.text = self.t("event.no_event")
+            self._event_meta_lbl.text = ""
 
     # ---- actions ----------------------------------------------------------
 
