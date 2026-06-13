@@ -195,6 +195,8 @@ class BoothAgent:
                         asyncio.create_task(self._handle_push_event(msg.get("event", {})))
                     elif msg_type == "restart":
                         self._handle_restart()
+                    elif msg_type == "reboot":
+                        self._handle_reboot()
                     elif msg_type in self._command_handlers:
                         try:
                             self._command_handlers[msg_type](msg)
@@ -331,33 +333,63 @@ class BoothAgent:
         time.sleep(0.5)
         os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
 
+    def _handle_reboot(self) -> None:
+        """Reboot the entire Raspberry Pi."""
+        logger.info("Remote reboot requested by admin")
+        # Give a moment for the log to be sent
+        time.sleep(0.5)
+        try:
+            subprocess.run(["sudo", "reboot"], check=False)
+        except Exception as e:
+            logger.error("Reboot failed: %s", e)
+
     async def _handle_push_event(self, event_data: dict) -> None:
         """Handle push_event from server: download background & cache config.
 
         The event card configuration is stored as a local JSON file
         so the booth can render photo cards without further API calls.
+
+        Emits ``sync_progress`` messages for each step and a final
+        ``event_synced`` confirmation (ok/error) so the admin can wait
+        for a confirmed sync before persisting the event coupling.
         """
+        event_uid = event_data.get("event_uid", "")
+
+        async def progress(step: str, label: str) -> None:
+            await self.send_message({
+                "type": "sync_progress",
+                "event_uid": event_uid,
+                "step": step,
+                "label": label,
+            })
+
         if not event_data:
             logger.warning("push_event received with empty data")
+            await self.send_message({
+                "type": "event_synced", "event_uid": event_uid,
+                "status": "error", "error": "Lege event-data ontvangen",
+            })
             return
 
-        logger.info(
-            "Received event card config: %s (bg=%s)",
-            event_data.get("event_name", "?"),
-            event_data.get("background_image", "none"),
-        )
+        try:
+            logger.info(
+                "Received event card config: %s (bg=%s)",
+                event_data.get("event_name", "?"),
+                event_data.get("background_image", "none"),
+            )
+            await progress("received", "Configuratie ontvangen")
 
-        # Determine data directory
-        data_dir = Path("/opt/photobooth/data")
-        if not data_dir.exists():
-            data_dir = Path("data")
-        data_dir.mkdir(parents=True, exist_ok=True)
+            # Determine data directory
+            data_dir = Path("/opt/photobooth/data")
+            if not data_dir.exists():
+                data_dir = Path("data")
+            data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download background image if URL provided
-        bg_url = event_data.get("background_url")
-        local_bg_path = None
-        if bg_url:
-            try:
+            # Download background image if URL provided
+            bg_url = event_data.get("background_url")
+            local_bg_path = None
+            if bg_url:
+                await progress("download_bg", "Achtergrond downloaden…")
                 import aiohttp
                 async with aiohttp.ClientSession() as session:
                     async with session.get(bg_url) as resp:
@@ -371,29 +403,41 @@ class BoothAgent:
                                 local_bg_path, len(bg_data),
                             )
                         else:
-                            logger.warning("Background download failed: HTTP %d", resp.status)
-            except Exception as e:
-                logger.error("Failed to download background: %s", e)
+                            raise RuntimeError(
+                                f"Achtergrond-download mislukt (HTTP {resp.status})"
+                            )
 
-        # Store event card config as JSON
-        card_config = {
-            "event_uid": event_data.get("event_uid", ""),
-            "event_name": event_data.get("event_name", ""),
-            "display_date": event_data.get("display_date", ""),
-            "branding_text": event_data.get("branding_text", ""),
-            "background_image_path": local_bg_path,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        config_path = data_dir / "event_card.json"
-        config_path.write_text(json.dumps(card_config, indent=2))
-        logger.info("Event card config saved to %s", config_path)
+            # Store event card config as JSON
+            await progress("save_config", "Configuratie opslaan…")
+            card_config = {
+                "event_uid": event_data.get("event_uid", ""),
+                "event_name": event_data.get("event_name", ""),
+                "display_date": event_data.get("display_date", ""),
+                "branding_text": event_data.get("branding_text", ""),
+                "background_image_path": local_bg_path,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            config_path = data_dir / "event_card.json"
+            config_path.write_text(json.dumps(card_config, indent=2))
+            logger.info("Event card config saved to %s", config_path)
 
-        # Notify registered handler (e.g. to update print settings)
-        if "push_event" in self._command_handlers:
-            try:
-                self._command_handlers["push_event"](card_config)
-            except Exception as e:
-                logger.error("push_event callback error: %s", e)
+            # Notify registered handler (e.g. to update print settings)
+            if "push_event" in self._command_handlers:
+                try:
+                    self._command_handlers["push_event"](card_config)
+                except Exception as e:
+                    logger.error("push_event callback error: %s", e)
+
+            await progress("done", "Synchronisatie voltooid")
+            await self.send_message({
+                "type": "event_synced", "event_uid": event_uid, "status": "ok",
+            })
+        except Exception as e:
+            logger.error("Event sync failed: %s", e)
+            await self.send_message({
+                "type": "event_synced", "event_uid": event_uid,
+                "status": "error", "error": str(e),
+            })
 
     async def _upload_photo(
         self,

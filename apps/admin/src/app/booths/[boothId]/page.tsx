@@ -4,11 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, getAccessToken, clearTokens, isLoggedIn } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
+import { Cpu, Thermometer, MemoryStick, HardDrive, Clock, RotateCw, Power, ChevronDown, RefreshCw, Server, Terminal, Check, X, CalendarDays, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface BoothInfo {
   id: string;
   booth_id: string;
   name: string | null;
+  event_id: string | null;
   status: string;
   last_seen: string | null;
   version: string | null;
@@ -33,6 +35,13 @@ interface BoothInfo {
   power_watts: number | null;
   power_throttled: string | null;
   settings: Record<string, unknown>;
+}
+
+interface EventOption {
+  id: string;
+  uid: string;
+  name: string;
+  is_active: boolean;
 }
 
 function formatUptime(seconds: number | null): string {
@@ -75,14 +84,17 @@ export default function BoothDetailPage({
 }) {
   const router = useRouter();
   const [booth, setBooth] = useState<BoothInfo | null>(null);
+  const [events, setEvents] = useState<EventOption[]>([]);
   const [loading, setLoading] = useState(true);
+  // Event sync
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"running" | "done" | "error">("running");
+  const [syncSteps, setSyncSteps] = useState<Array<{ step: string; label: string }>>([]);
+  const [syncError, setSyncError] = useState("");
+  const [syncEventName, setSyncEventName] = useState("");
   const [error, setError] = useState("");
   const [boothId, setBoothId] = useState<string>("");
-  const [previewing, setPreviewing] = useState(false);
-  const [lastFrame, setLastFrame] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const [logs, setLogs] = useState<Array<{level: string; message: string; logger: string; ts: string}>>([])
-  const [logStreaming, setLogStreaming] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const logWsRef = useRef<WebSocket | null>(null);
 
@@ -94,12 +106,12 @@ export default function BoothDetailPage({
   useEffect(() => {
     if (!boothId) return;
     fetchBooth();
+    fetchEvents();
     const interval = setInterval(fetchBooth, 5_000);
     return () => clearInterval(interval);
   }, [boothId]);
 
   useEffect(() => { return () => {
-    if (wsRef.current) wsRef.current.close();
     if (logWsRef.current) logWsRef.current.close();
   }; }, []);
 
@@ -130,26 +142,55 @@ export default function BoothDetailPage({
     }
   }
 
-  function togglePreview() { previewing ? stopPreview() : startPreview(); }
-
-  function startPreview() {
-    const token = getAccessToken();
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-    const ws = new WebSocket(`${wsUrl}/ws/admin/${boothId}?token=${token}`);
-    ws.onopen = () => { setPreviewing(true); ws.send(JSON.stringify({ type: "start_preview" })); };
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "frame" && msg.data) setLastFrame(`data:image/jpeg;base64,${msg.data}`);
-      } catch {}
-    };
-    ws.onclose = () => setPreviewing(false);
-    wsRef.current = ws;
+  async function fetchEvents() {
+    try {
+      const res = await authFetch("/api/api/events");
+      if (res.ok) setEvents(await res.json());
+    } catch {}
   }
 
-  function stopPreview() {
-    if (wsRef.current) { wsRef.current.send(JSON.stringify({ type: "stop_preview" })); wsRef.current.close(); wsRef.current = null; }
-    setPreviewing(false); setLastFrame(null);
+  async function handleEventChange(eventId: string) {
+    // Clearing the coupling needs no device sync.
+    if (!eventId) {
+      try {
+        const res = await authFetch(`/api/api/booths/${boothId}/sync-event`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_id: null }),
+        });
+        if (!res.ok) throw new Error("Loskoppelen mislukt");
+        fetchBooth();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Loskoppelen mislukt");
+      }
+      return;
+    }
+
+    // Coupling: push to booth and only persist after a confirmed sync.
+    const ev = events.find((e) => e.id === eventId);
+    setSyncEventName(ev?.name || "");
+    setSyncSteps([]);
+    setSyncError("");
+    setSyncStatus("running");
+    setSyncOpen(true);
+
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/sync-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Synchronisatie mislukt");
+      }
+      setSyncStatus("done");
+      await fetchBooth();
+    } catch (err) {
+      setSyncStatus("error");
+      setSyncError(err instanceof Error ? err.message : "Synchronisatie mislukt");
+      fetchBooth(); // revert the dropdown to the last persisted value
+    }
   }
 
   async function fetchInitialLogs() {
@@ -166,7 +207,6 @@ export default function BoothDetailPage({
     const token = getAccessToken();
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
     const ws = new WebSocket(`${wsUrl}/ws/admin/${boothId}?token=${token}`);
-    ws.onopen = () => setLogStreaming(true);
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
@@ -175,10 +215,11 @@ export default function BoothDetailPage({
             const next = [...prev, { level: msg.level, message: msg.message, logger: msg.logger, ts: msg.ts }];
             return next.length > 200 ? next.slice(-200) : next;
           });
+        } else if (msg.type === "sync_progress") {
+          setSyncSteps(prev => [...prev, { step: msg.step || "", label: msg.label || "" }]);
         }
       } catch {}
     };
-    ws.onclose = () => setLogStreaming(false);
     logWsRef.current = ws;
   }
 
@@ -209,79 +250,93 @@ export default function BoothDetailPage({
         backHref="/"
         badge={
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse" : "bg-gray-300"}`} />
+            <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-gray-300"}`} />
             <span className="text-sm text-[var(--muted)]">{isOnline ? "Online" : "Offline"}</span>
           </div>
         }
         actions={
-          <button onClick={() => fetchBooth()} className="px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--foreground)] bg-white hover:bg-gray-50 rounded-lg border border-[var(--card-border)] transition" title="Refresh">↻</button>
+          <div className="flex items-center gap-2">
+            <RestartControl boothId={boothId} isOnline={isOnline} />
+            <button onClick={() => fetchBooth()} className="flex items-center px-2.5 py-2 text-[var(--muted)] hover:text-[var(--foreground)] bg-white hover:bg-gray-50 rounded-lg border border-[var(--card-border)] transition" title="Refresh"><RefreshCw className="w-4 h-4" /></button>
+          </div>
         }
       />
 
-      {/* Top stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <MetricCard label="CPU" value={`${booth.cpu_percent ?? 0}%`} sub={<ProgressBar percent={booth.cpu_percent ?? 0} />} />
-          <MetricCard label="Temperatuur" value={booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} color={booth.cpu_temp && booth.cpu_temp > 70 ? "red" : booth.cpu_temp && booth.cpu_temp > 55 ? "amber" : "emerald"} />
-          <MetricCard label="Geheugen" value={`${booth.mem_used_mb} / ${booth.mem_total_mb} MB`} sub={<ProgressBar percent={booth.mem_percent} color="teal" />} />
-          <MetricCard label="Schijf" value={`${booth.disk_used_gb} / ${booth.disk_total_gb} GB`} sub={<ProgressBar percent={booth.disk_percent} color="emerald" />} />
-        <MetricCard label="Uptime" value={formatUptime(booth.uptime_seconds)} />
+      {/* Stats — combined into one block. Live metrics are only meaningful while online */}
+      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-5 divide-y divide-[var(--card-border)] md:divide-y-0 md:divide-x">
+          <Metric icon={<Cpu />} label="CPU" value={isOnline ? `${booth.cpu_percent ?? 0}%` : "—"} online={isOnline} percent={booth.cpu_percent ?? 0} />
+          <Metric icon={<Thermometer />} label="Temperatuur" value={isOnline && booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} online={isOnline} valueColor={booth.cpu_temp && booth.cpu_temp > 70 ? "text-red-600" : booth.cpu_temp && booth.cpu_temp > 55 ? "text-amber-600" : undefined} />
+          <Metric icon={<MemoryStick />} label="Geheugen" value={isOnline ? `${booth.mem_used_mb} / ${booth.mem_total_mb} MB` : "—"} online={isOnline} percent={booth.mem_percent} percentColor="teal" />
+          <Metric icon={<HardDrive />} label="Schijf" value={isOnline ? `${booth.disk_used_gb} / ${booth.disk_total_gb} GB` : "—"} online={isOnline} percent={booth.disk_percent} percentColor="emerald" />
+          <Metric icon={<Clock />} label="Uptime" value={isOnline ? formatUptime(booth.uptime_seconds) : "—"} online={isOnline} />
+        </div>
       </div>
 
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Device info */}
-          <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">📋 Apparaat</h2>
-            <dl className="space-y-3">
-              <InfoRow label="Booth ID" value={booth.booth_id} />
-              <InfoRow label="Naam" value={booth.name || "—"} />
-              <InfoRow label="Status" value={isOnline ? "🟢 Online" : "⚫ Offline"} />
-              <InfoRow label="Camera" value={booth.camera_connected ? "✓ Verbonden" : "✗ Geen"} />
-              <InfoRow label="Versie" value={booth.version ? `v${booth.version}` : "—"} />
-              <InfoRow label="Hostname" value={booth.hostname || "—"} />
-              <InfoRow label="Platform" value={booth.platform || "—"} />
-              <InfoRow label="Python" value={booth.python || "—"} />
-              <InfoRow label="Laatst gezien" value={formatLastSeen(booth.last_seen)} />
-            </dl>
-          </div>
-
-          {/* Live camera */}
-          <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-[var(--foreground)]">📷 Camera</h2>
-              <button onClick={togglePreview} disabled={!isOnline}
-                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition ${previewing ? "bg-[var(--danger-light)] text-[var(--danger)] hover:bg-red-100 border border-red-200" : "bg-[var(--accent-light)] text-[var(--accent-dark)] hover:bg-teal-100 border border-teal-200"} disabled:opacity-30 disabled:cursor-not-allowed`}>
-                {previewing ? "⏹ Stop" : "▶ Live"}
-              </button>
-            </div>
-            <div className="aspect-video bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center border border-[var(--card-border)]">
-              {lastFrame ? (
-                <img src={lastFrame} alt="Live camera feed" className="w-full h-full object-contain" />
-              ) : (
-                <div className="text-center text-[var(--muted-light)]">
-                  <p className="text-3xl mb-2">📷</p>
-                  <p className="text-sm">{isOnline ? "Klik ▶ voor live preview" : "Booth is offline"}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Settings Editor */}
-          <SettingsPanel settings={booth.settings || {}} boothId={boothId} isOnline={isOnline} onSaved={fetchBooth} />
+      {/* Event coupling */}
+      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--foreground)] mb-4">
+          <CalendarDays className="w-[18px] h-[18px] text-[var(--muted)]" />
+          Event
+        </h2>
+        <div className="relative max-w-md">
+          <select
+            value={booth.event_id || ""}
+            onChange={(e) => handleEventChange(e.target.value)}
+            className="w-full appearance-none bg-white border border-[var(--input-border)] rounded-lg pl-3 pr-9 py-2 text-sm text-[var(--foreground)] cursor-pointer focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15 transition"
+          >
+            <option value="">Geen event</option>
+            {events
+              .filter((ev) => ev.is_active || ev.id === booth.event_id)
+              .map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name}
+                </option>
+              ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-light)]" />
         </div>
+      </div>
+
+      {/* Device info */}
+      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--foreground)] mb-4">
+          <Server className="w-[18px] h-[18px] text-[var(--muted)]" />
+          Apparaat
+        </h2>
+        <dl className="grid sm:grid-cols-2 gap-x-10 gap-y-3">
+          <InfoRow label="Booth ID" value={booth.booth_id} />
+          <InfoRow label="Naam" value={booth.name || "—"} />
+          <InfoRow
+            label="Camera"
+            value={
+              booth.camera_connected ? (
+                <span className="inline-flex items-center gap-1 text-emerald-600">
+                  <Check className="w-4 h-4" /> Verbonden
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[var(--muted)]">
+                  <X className="w-4 h-4" /> Geen
+                </span>
+              )
+            }
+          />
+          <InfoRow label="Versie" value={booth.version ? `v${booth.version}` : "—"} />
+          <InfoRow label="Hostname" value={booth.hostname || "—"} />
+          <InfoRow label="Platform" value={booth.platform || "—"} />
+          <InfoRow label="Python" value={booth.python || "—"} />
+          <InfoRow label="Laatst gezien" value={formatLastSeen(booth.last_seen)} />
+        </dl>
+      </div>
 
         {/* Log panel — full width */}
-        <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-[var(--foreground)]">📜 Logs</h2>
-            <div className="flex items-center gap-3">
-              <span className={`flex items-center gap-1.5 text-xs ${logStreaming ? "text-emerald-600" : "text-[var(--muted-light)]"}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${logStreaming ? "bg-emerald-500 animate-pulse" : "bg-gray-300"}`} />
-                {logStreaming ? "Live" : "Offline"}
-              </span>
-              <button onClick={() => { setLogs([]); fetchInitialLogs(); }} className="text-xs text-[var(--muted-light)] hover:text-[var(--foreground)] transition">Clear</button>
-            </div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--foreground)]">
+              <Terminal className="w-[18px] h-[18px] text-[var(--muted)]" />
+              Logs
+            </h2>
+            <button onClick={() => { setLogs([]); fetchInitialLogs(); }} className="text-xs text-[var(--muted-light)] hover:text-[var(--foreground)] transition">Clear</button>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 h-72 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin border border-[var(--card-border)]">
             {logs.length === 0 ? (
@@ -299,22 +354,169 @@ export default function BoothDetailPage({
             <div ref={logEndRef} />
           </div>
         </div>
+
+        {/* Event sync overlay */}
+        {syncOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+            <div className="bg-white border border-[var(--card-border)] rounded-xl w-full max-w-md p-6">
+              <div className="flex items-center gap-2.5 mb-1">
+                {syncStatus === "running" && <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)]" />}
+                {syncStatus === "done" && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                {syncStatus === "error" && <AlertTriangle className="w-5 h-5 text-[var(--danger)]" />}
+                <h3 className="text-base font-semibold text-[var(--foreground)]">
+                  {syncStatus === "error"
+                    ? "Synchronisatie mislukt"
+                    : syncStatus === "done"
+                    ? "Gesynchroniseerd"
+                    : "Event synchroniseren"}
+                </h3>
+              </div>
+              <p className="text-sm text-[var(--muted)] mb-4 pl-[30px]">
+                {syncEventName} → {booth.name || booth.booth_id}
+              </p>
+
+              <ul className="space-y-2">
+                {syncSteps.map((s, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-[var(--foreground)]">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                    {s.label}
+                  </li>
+                ))}
+                {syncStatus === "running" && (
+                  <li className="flex items-center gap-2 text-sm text-[var(--muted)]">
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    Wachten op booth…
+                  </li>
+                )}
+              </ul>
+
+              {syncStatus === "error" && (
+                <p className="mt-4 text-sm text-[var(--danger)] bg-[var(--danger-light)] border border-red-200 rounded-lg p-3">
+                  {syncError}
+                </p>
+              )}
+
+              {syncStatus !== "running" && (
+                <div className="flex justify-end mt-5">
+                  <button
+                    onClick={() => setSyncOpen(false)}
+                    className="px-4 py-2 text-sm font-medium bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white rounded-lg transition"
+                  >
+                    Sluiten
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
     </div>
   );
 }
 
-function MetricCard({ label, value, sub, color = "teal" }: { label: string; value: string; sub?: React.ReactNode; color?: string }) {
-  const colorMap: Record<string, string> = { emerald: "text-emerald-600", red: "text-red-600", amber: "text-amber-600", teal: "text-[var(--accent-dark)]", gray: "text-[var(--muted)]" };
+function Metric({
+  icon,
+  label,
+  value,
+  online,
+  percent,
+  percentColor = "teal",
+  valueColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  online: boolean;
+  percent?: number;
+  percentColor?: string;
+  valueColor?: string;
+}) {
   return (
-    <div className="bg-white border border-[var(--card-border)] rounded-xl p-4 shadow-sm">
-      <p className="text-xs text-[var(--muted-light)] mb-1">{label}</p>
-      <p className={`text-lg font-semibold ${colorMap[color] || colorMap.teal}`}>{value}</p>
-      {sub}
+    <div className="md:px-5 first:pl-0 last:pr-0 pt-5 first:pt-0 md:pt-0">
+      <div className="flex items-center gap-1.5 text-[var(--muted-light)] mb-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5">
+        {icon}
+        <span className="text-xs">{label}</span>
+      </div>
+      <p className={`text-lg font-semibold ${online ? valueColor || "text-[var(--foreground)]" : "text-[var(--muted-light)]"}`}>
+        {value}
+      </p>
+      {online && percent !== undefined && <ProgressBar percent={percent} color={percentColor} />}
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function RestartControl({ boothId, isOnline }: { boothId: string; isOnline: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  async function send(kind: "restart" | "reboot") {
+    setOpen(false);
+    const prompts: Record<typeof kind, string> = {
+      restart: "Weet je zeker dat je de photobooth-applicatie wilt herstarten?",
+      reboot:
+        "Weet je zeker dat je de hele Raspberry Pi wilt herstarten? De booth is dan ±1 minuut offline.",
+    };
+    if (!confirm(prompts[kind])) return;
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/${kind}`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Commando mislukt");
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Commando mislukt");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const disabled = !isOnline || busy;
+
+  return (
+    <div className="relative flex" ref={ref}>
+      <button
+        onClick={() => send("restart")}
+        disabled={disabled}
+        title={isOnline ? "Herstart de photobooth-applicatie" : "Booth is offline"}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-l-lg bg-[var(--warning-light)] text-amber-700 border border-amber-200 hover:bg-amber-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <RotateCw className="w-4 h-4" />
+        Herstart app
+      </button>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        title="Meer herstart-opties"
+        className="flex items-center px-1.5 py-1.5 rounded-r-lg bg-[var(--warning-light)] text-amber-700 border border-l-0 border-amber-200 hover:bg-amber-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-60 bg-white border border-[var(--card-border)] rounded-lg py-1 z-50">
+          <button
+            onClick={() => send("reboot")}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--danger)] hover:bg-[var(--danger-light)] transition"
+          >
+            <Power className="w-4 h-4 shrink-0" />
+            Herstart Raspberry Pi
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-start gap-2">
       <dt className="text-sm text-[var(--muted)]">{label}</dt>
@@ -335,188 +537,5 @@ function LogLevel({ level }: { level: string }) {
     <span className={`shrink-0 w-14 ${colors[level] || colors.INFO}`}>
       {level}
     </span>
-  );
-}
-
-
-
-function SettingsPanel({
-  settings,
-  boothId,
-  isOnline,
-  onSaved,
-}: {
-  settings: Record<string, unknown>;
-  boothId: string;
-  isOnline: boolean;
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState<Record<string, unknown>>({});
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<{ type: "ok" | "error"; msg: string } | null>(null);
-
-  // Init form from live settings
-  useEffect(() => {
-    if (Object.keys(settings).length > 0 && Object.keys(form).length === 0) {
-      setForm({ ...settings });
-    }
-  }, [settings]);
-
-  function update(key: string, value: unknown) {
-    setForm(prev => ({ ...prev, [key]: value }));
-    setStatus(null);
-  }
-
-  async function save() {
-    setSaving(true);
-    setStatus(null);
-    try {
-      const res = await authFetch(`/api/api/booths/${boothId}/settings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed");
-      }
-      setStatus({ type: "ok", msg: "Opgeslagen ✓" });
-      setTimeout(() => onSaved(), 2000);
-    } catch (err) {
-      setStatus({ type: "error", msg: err instanceof Error ? err.message : "Error" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function restart() {
-    if (!confirm("Wil je de booth herstarten?")) return;
-    try {
-      await authFetch(`/api/api/booths/${boothId}/restart`, { method: "POST" });
-      setStatus({ type: "ok", msg: "Herstart verzonden" });
-    } catch {
-      setStatus({ type: "error", msg: "Herstart mislukt" });
-    }
-  }
-
-  const inputClass = "w-full bg-white border border-[var(--input-border)] rounded-lg px-3 py-1.5 text-sm text-[var(--foreground)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/20 focus:outline-none transition";
-  const labelClass = "text-xs text-[var(--muted)] mb-0.5";
-
-  if (Object.keys(settings).length === 0) {
-    return (
-      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-[var(--foreground)] mb-4">⚙️ Instellingen</h2>
-        <p className="text-[var(--muted)] text-sm">Wachten op heartbeat data...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-[var(--foreground)]">⚙️ Instellingen</h2>
-        {status && (
-          <span className={`text-xs px-2 py-0.5 rounded ${status.type === "ok" ? "bg-[var(--success-light)] text-emerald-700" : "bg-[var(--danger-light)] text-[var(--danger)]"}`}>
-            {status.msg}
-          </span>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        {/* Event */}
-        <div>
-          <label className={labelClass}>Event naam</label>
-          <input className={inputClass} value={String(form.event_name || "")} onChange={e => update("event_name", e.target.value)} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Taal</label>
-            <select className={inputClass} value={String(form.language || "nl")} onChange={e => update("language", e.target.value)}>
-              <option value="nl">NL</option>
-              <option value="en">EN</option>
-              <option value="de">DE</option>
-              <option value="fr">FR</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Thema</label>
-            <select className={inputClass} value={String(form.theme || "classic")} onChange={e => update("theme", e.target.value)}>
-              <option value="classic">Classic</option>
-              <option value="neon">Neon</option>
-              <option value="elegant">Elegant</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--card-border)] my-1" />
-
-        {/* Camera */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Camera</label>
-            <select className={inputClass} value={String(form.camera_backend || "gphoto2")} onChange={e => update("camera_backend", e.target.value)}>
-              <option value="gphoto2">DSLR (gPhoto2)</option>
-              <option value="webcam">Webcam</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>ISO</label>
-            <input className={inputClass} value={String(form.camera_iso || "")} onChange={e => update("camera_iso", e.target.value)} placeholder="auto" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Diafragma</label>
-            <input className={inputClass} value={String(form.camera_aperture || "")} onChange={e => update("camera_aperture", e.target.value)} placeholder="auto" />
-          </div>
-          <div>
-            <label className={labelClass}>Sluitertijd</label>
-            <input className={inputClass} value={String(form.camera_shutter || "")} onChange={e => update("camera_shutter", e.target.value)} placeholder="auto" />
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--card-border)] my-1" />
-
-        {/* Countdown */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>1e Countdown (sec)</label>
-            <input type="number" className={inputClass} value={Number(form.first_countdown || 5)} onChange={e => update("first_countdown", parseInt(e.target.value) || 5)} min={1} max={30} />
-          </div>
-          <div>
-            <label className={labelClass}>Tussenpauze (sec)</label>
-            <input type="number" className={inputClass} value={Number(form.between_shots || 3)} onChange={e => update("between_shots", parseInt(e.target.value) || 3)} min={1} max={30} />
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--card-border)] my-1" />
-
-        {/* LEDs */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="led-toggle" className="accent-[var(--accent)]" checked={!!form.led_enabled} onChange={e => update("led_enabled", e.target.checked)} />
-            <label htmlFor="led-toggle" className="text-sm text-[var(--muted)]">LEDs aan</label>
-          </div>
-          <div>
-            <label className={labelClass}>Helderheid (0-255)</label>
-            <input type="number" className={inputClass} value={Number(form.led_brightness || 100)} onChange={e => update("led_brightness", parseInt(e.target.value) || 100)} min={0} max={255} />
-          </div>
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex gap-2 mt-5">
-        <button onClick={save} disabled={!isOnline || saving}
-          className="flex-1 py-2 text-sm font-medium bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
-          {saving ? "Opslaan..." : "💾 Opslaan"}
-        </button>
-        <button onClick={restart} disabled={!isOnline}
-          className="px-4 py-2 text-sm font-medium bg-[var(--warning-light)] hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed">
-          🔄 Herstart
-        </button>
-      </div>
-    </div>
   );
 }

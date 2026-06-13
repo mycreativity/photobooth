@@ -402,7 +402,7 @@ export default function EventDetailPage() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowOverflow(false)}
                 />
-                <div className="absolute bottom-full left-0 mb-2 bg-white border border-[var(--card-border)] rounded-lg shadow-lg py-1 z-50 min-w-[160px]">
+                <div className="absolute bottom-full left-0 mb-2 bg-white border border-[var(--card-border)] rounded-lg py-1 z-50 min-w-[160px]">
                   <button
                     onClick={() => {
                       setShowOverflow(false);

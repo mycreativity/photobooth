@@ -191,6 +191,24 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
                 hub.append_log(booth_id, log_entry)
                 await hub.relay_log_to_admins(booth_id, log_entry)
 
+            elif msg_type == "sync_progress":
+                if not authenticated:
+                    continue
+                await hub.relay_sync_progress(booth_id, {
+                    "event_uid": msg.get("event_uid"),
+                    "step": msg.get("step"),
+                    "label": msg.get("label"),
+                })
+
+            elif msg_type == "event_synced":
+                if not authenticated:
+                    continue
+                hub.resolve_sync(booth_id, {
+                    "status": msg.get("status", "ok"),
+                    "event_uid": msg.get("event_uid"),
+                    "error": msg.get("error"),
+                })
+
             else:
                 logger.debug("Unknown message type from %s: %s", booth_id, msg_type)
 

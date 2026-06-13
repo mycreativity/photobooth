@@ -41,7 +41,7 @@ from kivy.graphics import (
     Color, Ellipse, Line, Rectangle, RoundedRectangle, Triangle,
 )
 
-from photobooth.ui.components import BoothButton, BoothCard, BoothIconButton
+from photobooth.ui.components import BoothButton
 
 if TYPE_CHECKING:
     from photobooth.config import BoothConfig
@@ -2957,1164 +2957,150 @@ class PrintScreen(BaseBoothScreen):
 
 
 class SettingsScreen(BaseBoothScreen):
-    """Interactive admin settings — 5s long-press access from idle.
+    """Minimal settings screen — black background, invisible 2×3 grid.
 
-    Settings are persisted to SQLite and override TOML config values.
-    Language and theme changes trigger an app restart.
+    Accessed via a 5s long-press from the idle screen. Only two grid cells
+    are populated:
 
-    UI is split into two tabs:
-    - General: event name, language, theme, countdown settings
-    - Effects: glamour pipeline sliders (skin smooth, warmth, vignette, eyes)
+      1. An info card for the currently coupled (active) event.
+      2. A button to restart the app.
+
+    The remaining four cells are intentionally empty, reserved for future
+    controls. Booth configuration (language, theme, camera, countdown,
+    glamour) is no longer edited here — those values are still loaded from
+    TOML + SQLite at startup, so the rest of the app keeps working exactly
+    as before.
     """
+
+    # Centres for the 2×3 grid of square cells (no visible gridlines).
+    _COLS = (0.28, 0.50, 0.72)
+    _ROWS = (0.62, 0.30)
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_SETTINGS, **kwargs)
 
-        from photobooth.i18n import available_languages
-        from photobooth.ui.themes import available_themes
+        # Opaque black background — hides the live camera preview that the
+        # other screens show behind the screen manager.
+        with self.canvas.before:
+            Color(0, 0, 0, 1)
+            self._bg_rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._sync_bg, size=self._sync_bg)
 
-        self._available_languages = available_languages()
-        self._available_themes = available_themes()
-
-        # --- Current mutable values (loaded from config + SQLite) ---
-        self._language = self.config.app.language if self.config else "nl"
-        self._theme_name = self.config.app.theme if self.config else "classic"
-        self._first_countdown = self.config.countdown.first_countdown if self.config else 5
-        self._between_shots = self.config.countdown.between_shots if self.config else 3
-
-        # Glamour defaults
-        glamour = self.config.glamour if self.config else None
-        self._glamour_skin = glamour.skin_smooth if glamour else 0.7
-        self._glamour_warmth = glamour.warmth if glamour else 0.5
-        self._glamour_vignette = glamour.vignette if glamour else 0.5
-        self._glamour_eyes = glamour.eye_enhance if glamour else 0.5
-        self._glamour_makeup = glamour.makeup if glamour else 0.5
-        self._glamour_sparkles = glamour.sparkles if glamour else 0.3
-        self._glamour_glow = glamour.soft_glow if glamour else 0.4
-
-        # Track if language/theme changed (needs restart)
-        self._original_language = self._language
-        self._original_theme = self._theme_name
-        self._active_tab = "general"
-
-        # ----- Tab bar (scrollable, compact) -----
-        from kivy.uix.scrollview import ScrollView
-        from kivy.uix.boxlayout import BoxLayout
-
-        tab_scroll = ScrollView(
-            size_hint=(0.92, 0.07),
-            pos_hint={"center_x": 0.5, "center_y": 0.94},
-            do_scroll_y=False,
-            bar_width=0,
-        )
-        tab_box = BoxLayout(
-            orientation="horizontal",
-            spacing=8,
-            size_hint_x=None,
-            size_hint_y=1,
-            padding=[4, 0],
-        )
-        tab_box.bind(minimum_width=tab_box.setter("width"))
-
-        self._tab_general = BoothButton(
-            text=self.t("settings.tab_general"),
-            theme=self.theme,
-            variant="primary",
-            on_press=lambda: self._switch_tab("general"),
-            size_hint=(None, 1.0),
-            width=200,
-        )
-        self._tab_effects = BoothButton(
-            text=self.t("settings.tab_effects"),
-            theme=self.theme,
-            variant="ghost",
-            on_press=lambda: self._switch_tab("effects"),
-            size_hint=(None, 1.0),
-            width=200,
-        )
-        self._tab_camera = BoothButton(
-            text=self.t("settings.tab_camera"),
-            theme=self.theme,
-            variant="ghost",
-            on_press=lambda: self._switch_tab("camera"),
-            size_hint=(None, 1.0),
-            width=200,
-        )
-        tab_box.add_widget(self._tab_general)
-        tab_box.add_widget(self._tab_effects)
-        tab_box.add_widget(self._tab_camera)
-        tab_scroll.add_widget(tab_box)
-        self.add_widget(tab_scroll)
-
-        # ===== General content container =====
-        self._general_container = FloatLayout(
-            size_hint=(0.92, 0.68),
-            pos_hint={"center_x": 0.5, "center_y": 0.52},
-        )
-        self._build_general_tab()
-        self.add_widget(self._general_container)
-
-        # ===== Effects content container =====
-        self._effects_container = FloatLayout(
-            size_hint=(0.92, 0.68),
-            pos_hint={"center_x": 0.5, "center_y": 0.52},
-        )
-        self._build_effects_tab()
-        self._effects_container.opacity = 0
-        self._effects_container.disabled = True
-        self.add_widget(self._effects_container)
-
-        # ===== Camera content container =====
-        self._camera_container = FloatLayout(
-            size_hint=(0.92, 0.68),
-            pos_hint={"center_x": 0.5, "center_y": 0.52},
-        )
-        self._build_camera_tab()
-        self._camera_container.opacity = 0
-        self._camera_container.disabled = True
-        self.add_widget(self._camera_container)
-
-        # ----- Stats (read-only) -----
-        self._stats_label = Label(
-            text="",
-            font_size=self.theme.typography.body_size,
-            color=self.theme.colors.text_muted,
-            pos_hint={"center_x": 0.5, "center_y": 0.16},
-        )
-        self.add_widget(self._stats_label)
-
-        # ----- Status message -----
-        self._status_label = Label(
-            text="",
-            font_size=self.theme.typography.body_size,
-            color=self.theme.colors.success,
-            pos_hint={"center_x": 0.5, "center_y": 0.12},
-        )
-        self.add_widget(self._status_label)
-
-        # ----- Bottom buttons: Back | Restart | Save -----
+        # Back button (top-left) — exit without restarting.
         self.add_widget(BoothButton(
             text=self.t("settings.back"),
             theme=self.theme,
             variant="ghost",
             on_press=self._go_back,
-            size_hint=(0.25, 0.08),
-            pos_hint={"center_x": 0.20, "center_y": 0.05},
-        ))
-        self.add_widget(BoothButton(
-            text="↺ Restart",
-            theme=self.theme,
-            variant="ghost",
-            on_press=self._restart_app,
-            size_hint=(0.25, 0.08),
-            pos_hint={"center_x": 0.50, "center_y": 0.05},
-        ))
-        self.add_widget(BoothButton(
-            text=self.t("settings.save"),
-            theme=self.theme,
-            variant="primary",
-            on_press=self._save_settings,
-            size_hint=(0.25, 0.08),
-            pos_hint={"center_x": 0.80, "center_y": 0.05},
+            size_hint=(0.16, 0.08),
+            pos_hint={"x": 0.03, "top": 0.97},
         ))
 
-    # ---- tab builders -----------------------------------------------------
+        # ── Invisible 2×3 grid of square cells ─────────────────────────
+        cells = [(cx, cy) for cy in self._ROWS for cx in self._COLS]
 
-    def _build_general_tab(self) -> None:
-        """Build the General settings tab content with event management."""
-        c = self._general_container
-        c.clear_widgets()
+        # Cell 1 — coupled-event info card.
+        self._event_card = self._make_cell(*cells[0])
+        self._build_event_card(self._event_card)
+        self.add_widget(self._event_card)
 
-        # Camera (read-only)
-        camera_name = self.camera.name if self.camera else "None"
-        c.add_widget(Label(
-            text=self.t("settings.camera", name=camera_name),
-            font_size=self.theme.typography.body_size,
-            color=self.theme.colors.text_muted,
-            pos_hint={"center_x": 0.5, "center_y": 0.95},
-        ))
-
-        # ── Event section ──────────────────────────────────────────────
-        # Container for the event row — swaps between two states:
-        #   A) Event name label + small reset icon
-        #   B) "Nieuw Event" button
-        self._event_row = FloatLayout(
-            size_hint=(0.85, 0.14),
-            pos_hint={"center_x": 0.5, "center_y": 0.82},
-        )
-        c.add_widget(self._event_row)
-
-        # State A: event name display + reset icon
-        self._event_name_area = FloatLayout(
-            size_hint=(1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
-        )
-        self._event_row.add_widget(self._event_name_area)
-
-        self._event_name_area.add_widget(Label(
-            text=self.t("event.current"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            halign="left", valign="middle",
-            size_hint=(0.22, 0.5),
-            pos_hint={"x": 0.0, "center_y": 0.65},
-        ))
-        self._event_name_label = Label(
-            text="",
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            halign="left", valign="middle",
-            size_hint=(0.50, 0.5),
-            pos_hint={"x": 0.22, "center_y": 0.65},
-        )
-        self._event_name_label.bind(
-            size=self._event_name_label.setter("text_size"),
-        )
-        self._event_name_area.add_widget(self._event_name_label)
-
-        # Small reset icon button (↺)
-        self._event_name_area.add_widget(BoothIconButton(
-            text="↺",
-            theme=self.theme,
-            on_press=self._reset_event_name,
-            font_size="20sp",
-            size_hint=(0.07, 0.50),
-            pos_hint={"center_x": 0.82, "center_y": 0.65},
-        ))
-
-        # Event stats below the name
-        self._event_stats_label = Label(
-            text="",
-            font_size="13sp",
-            color=self.theme.colors.text_muted,
-            halign="left", valign="middle",
-            size_hint=(0.70, 0.35),
-            pos_hint={"x": 0.22, "center_y": 0.25},
-        )
-        self._event_stats_label.bind(
-            size=self._event_stats_label.setter("text_size"),
-        )
-        self._event_name_area.add_widget(self._event_stats_label)
-
-        # State B: "Nieuw Event" button (visible when no event)
-        self._new_event_btn = BoothButton(
-            text=self.t("event.create_new"),
-            theme=self.theme, variant="secondary",
-            on_press=self._open_event_keyboard,
-            size_hint=(0.35, 0.45),
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
-        )
-        self._event_row.add_widget(self._new_event_btn)
-
-        # Pending event name (not yet saved)
-        self._pending_event_name = None  # None = no change, str = new name
-
-        # ── Remaining settings rows ────────────────────────────────────
-        rows = [0.58, 0.44, 0.30, 0.16]
-
-        # Row 0: Language
-        c.add_widget(Label(
-            text=self.t("settings.language_label"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[0]},
-        ))
-        self._lang_value = Label(
-            text=self._language.upper(),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[0]},
-        )
-        c.add_widget(self._lang_value)
-        self._add_cycle_button(c, 0.75, rows[0], self._cycle_language)
-
-        # Row 1: Theme
-        c.add_widget(Label(
-            text=self.t("settings.theme_label"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[1]},
-        ))
-        self._theme_value = Label(
-            text=self._theme_name,
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[1]},
-        )
-        c.add_widget(self._theme_value)
-        self._add_cycle_button(c, 0.75, rows[1], self._cycle_theme)
-
-        # Row 2: First countdown
-        c.add_widget(Label(
-            text=self.t("settings.first_countdown"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[2]},
-        ))
-        self._first_cd_label = Label(
-            text=self.t("settings.seconds", n=str(self._first_countdown)),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[2]},
-        )
-        c.add_widget(self._first_cd_label)
-        self._add_stepper(c, 0.70, 0.80, rows[2],
-                          lambda: self._adjust_countdown("first", -1),
-                          lambda: self._adjust_countdown("first", +1))
-
-        # Row 3: Between shots
-        c.add_widget(Label(
-            text=self.t("settings.between_shots"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[3]},
-        ))
-        self._between_label = Label(
-            text=self.t("settings.seconds", n=str(self._between_shots)),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[3]},
-        )
-        c.add_widget(self._between_label)
-        self._add_stepper(c, 0.70, 0.80, rows[3],
-                          lambda: self._adjust_countdown("between", -1),
-                          lambda: self._adjust_countdown("between", +1))
-
-    def _build_effects_tab(self) -> None:
-        """Build the Effects tab with live preview + glamour sliders."""
-        from photobooth.ui.components import BoothSlider
-
-        c = self._effects_container
-
-        # --- Left side: Live preview image ---
-        self._preview_container = FloatLayout(
-            size_hint=(0.35, 0.88),
-            pos_hint={"x": 0.02, "center_y": 0.50},
-        )
-
-        # Load the dummy portrait as baseline
-        import os
-        preview_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-            "assets", "glamour_preview.jpg",
-        )
-        self._preview_base_jpeg = None
-        if os.path.exists(preview_path):
-            with open(preview_path, "rb") as f:
-                self._preview_base_jpeg = f.read()
-
-        # Preview image widget
-        self._preview_image = UixImage(
-            size_hint=(0.92, 0.82),
-            pos_hint={"center_x": 0.5, "center_y": 0.55},
-            allow_stretch=True,
-            keep_ratio=True,
-        )
-        self._preview_container.add_widget(self._preview_image)
-
-        # "Preview" label
-        self._preview_container.add_widget(Label(
-            text="Preview",
-            font_size="13sp",
-            color=self.theme.colors.text_muted,
-            pos_hint={"center_x": 0.5, "center_y": 0.05},
-        ))
-
-        # Preview loading indicator
-        self._preview_spinner = Label(
-            text="⟳",
-            font_size="24sp",
-            color=self.theme.colors.primary,
-            pos_hint={"center_x": 0.5, "center_y": 0.55},
-            opacity=0,
-        )
-        self._preview_container.add_widget(self._preview_spinner)
-
-        c.add_widget(self._preview_container)
-
-        # Show initial preview
-        if self._preview_base_jpeg:
-            self._load_preview_texture(self._preview_base_jpeg)
-
-        # --- Right side: Sliders ---
-        slider_container = FloatLayout(
-            size_hint=(0.58, 0.92),
-            pos_hint={"right": 0.98, "center_y": 0.50},
-        )
-
-        # 7 sliders stacked vertically
-        slider_rows = [0.93, 0.81, 0.69, 0.57, 0.45, 0.33, 0.21]
-
-        def _on_slider_change(attr_name):
-            def _cb(v):
-                setattr(self, attr_name, v)
-                self._schedule_preview_update()
-            return _cb
-
-        self._skin_slider = BoothSlider(
-            label=self.t("settings.glamour_skin"),
-            value=self._glamour_skin,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_skin"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[0]},
-        )
-        slider_container.add_widget(self._skin_slider)
-
-        self._warmth_slider = BoothSlider(
-            label=self.t("settings.glamour_warmth"),
-            value=self._glamour_warmth,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_warmth"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[1]},
-        )
-        slider_container.add_widget(self._warmth_slider)
-
-        self._vignette_slider = BoothSlider(
-            label=self.t("settings.glamour_vignette"),
-            value=self._glamour_vignette,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_vignette"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[2]},
-        )
-        slider_container.add_widget(self._vignette_slider)
-
-        self._eyes_slider = BoothSlider(
-            label=self.t("settings.glamour_eyes"),
-            value=self._glamour_eyes,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_eyes"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[3]},
-        )
-        slider_container.add_widget(self._eyes_slider)
-
-        self._makeup_slider = BoothSlider(
-            label=self.t("settings.glamour_makeup"),
-            value=self._glamour_makeup,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_makeup"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[4]},
-        )
-        slider_container.add_widget(self._makeup_slider)
-
-        self._glow_slider = BoothSlider(
-            label=self.t("settings.glamour_glow"),
-            value=self._glamour_glow,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_glow"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[5]},
-        )
-        slider_container.add_widget(self._glow_slider)
-
-        self._sparkles_slider = BoothSlider(
-            label=self.t("settings.glamour_sparkles"),
-            value=self._glamour_sparkles,
-            theme=self.theme,
-            on_change=_on_slider_change("_glamour_sparkles"),
-            size_hint=(0.95, 0.10),
-            pos_hint={"center_x": 0.5, "center_y": slider_rows[6]},
-        )
-        slider_container.add_widget(self._sparkles_slider)
-
-        c.add_widget(slider_container)
-
-        # Preview debounce timer
-        self._preview_update_event = None
-
-    # ---- camera tab -------------------------------------------------------
-
-    def _build_camera_tab(self) -> None:
-        """Build the Camera settings tab.
-
-        Shows camera backend selector, and when gphoto2 is active,
-        DSLR-specific controls: ISO, aperture, shutter speed, and
-        an auto-exposure calibration button.
-        """
-        c = self._camera_container
-        c.clear_widgets()
-
-        # Current backend from config
-        self._camera_backend = (
-            self.config.camera.backend if self.config else "webcam"
-        )
-        self._camera_iso = self.config.camera.iso if self.config else "auto"
-        self._camera_aperture = self.config.camera.aperture if self.config else ""
-        self._camera_shutter = self.config.camera.shutter_speed if self.config else "auto"
-        self._camera_fps = self.config.camera.preview_fps if self.config else 15
-
-        # Backend display names
-        self._backend_options = ["webcam", "gphoto2"]
-        self._backend_labels = {
-            "webcam": "Webcam",
-            "gphoto2": "Canon DSLR",
-        }
-
-        # DSLR choices cache (populated when camera is connected)
-        self._dslr_iso_choices: list[str] = []
-        self._dslr_aperture_choices: list[str] = []
-        self._dslr_shutter_choices: list[str] = []
-
-        rows = [0.88, 0.72, 0.58, 0.44, 0.30, 0.14]
-
-        # Row 0: Camera backend
-        c.add_widget(Label(
-            text=self.t("settings.camera_backend"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[0]},
-        ))
-        self._backend_value = Label(
-            text=self._backend_labels.get(self._camera_backend, self._camera_backend),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[0]},
-        )
-        c.add_widget(self._backend_value)
-        self._add_cycle_button(c, 0.75, rows[0], self._cycle_camera_backend)
-
-        # Row 1: ISO
-        c.add_widget(Label(
-            text=self.t("settings.camera_iso"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[1]},
-        ))
-        self._iso_value = Label(
-            text=self._camera_iso,
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[1]},
-        )
-        c.add_widget(self._iso_value)
-        self._add_cycle_button(c, 0.75, rows[1], self._cycle_iso)
-
-        # Row 2: Aperture
-        c.add_widget(Label(
-            text=self.t("settings.camera_aperture"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[2]},
-        ))
-        self._aperture_value = Label(
-            text=f"f/{self._camera_aperture}" if self._camera_aperture else "auto",
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[2]},
-        )
-        c.add_widget(self._aperture_value)
-        self._add_cycle_button(c, 0.75, rows[2], self._cycle_aperture)
-
-        # Row 3: Shutter speed
-        c.add_widget(Label(
-            text=self.t("settings.camera_shutter"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[3]},
-        ))
-        self._shutter_value = Label(
-            text=self._camera_shutter,
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[3]},
-        )
-        c.add_widget(self._shutter_value)
-        self._add_cycle_button(c, 0.75, rows[3], self._cycle_shutter)
-
-        # Row 4: Preview FPS
-        c.add_widget(Label(
-            text=self.t("settings.camera_preview_fps"),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.text,
-            pos_hint={"center_x": 0.25, "center_y": rows[4]},
-        ))
-        self._fps_value = Label(
-            text=str(self._camera_fps),
-            font_size=self.theme.typography.body_size,
-            bold=True, color=self.theme.colors.primary_light,
-            pos_hint={"center_x": 0.55, "center_y": rows[4]},
-        )
-        c.add_widget(self._fps_value)
-        self._add_stepper(c, 0.70, 0.80, rows[4],
-                          lambda: self._adjust_fps(-1),
-                          lambda: self._adjust_fps(+1))
-
-        # Row 5: Auto Exposure button + status
-        self._calibrate_btn = BoothButton(
-            text=self.t("settings.camera_auto_exposure"),
+        # Cell 2 — restart-app button (fills the square cell).
+        restart_cell = self._make_cell(*cells[1])
+        restart_cell.add_widget(BoothButton(
+            text="↺  Herstart app",
             theme=self.theme,
             variant="secondary",
-            on_press=self._run_auto_exposure,
-            size_hint=(0.40, 0.12),
-            pos_hint={"center_x": 0.35, "center_y": rows[5]},
+            on_press=self._restart_app,
+            size_hint=(1, 1),
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
+        ))
+        self.add_widget(restart_cell)
+
+        # Cells 3–6 are intentionally empty (reserved for future controls).
+
+    # ---- layout helpers ---------------------------------------------------
+
+    def _sync_bg(self, *_args) -> None:
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+
+    def _make_cell(self, center_x: float, center_y: float) -> FloatLayout:
+        """A square grid cell (height tracks width), positioned by centre."""
+        cell = FloatLayout(
+            size_hint=(0.18, None),
+            pos_hint={"center_x": center_x, "center_y": center_y},
         )
-        c.add_widget(self._calibrate_btn)
+        cell.bind(width=lambda inst, w: setattr(inst, "height", w))
+        return cell
 
-        self._calibrate_status = Label(
-            text="",
-            font_size="16sp",
-            color=self.theme.colors.text_muted,
-            pos_hint={"center_x": 0.72, "center_y": rows[5]},
-            halign="left", valign="middle",
-            size_hint=(0.45, 0.1),
-        )
-        self._calibrate_status.bind(
-            size=self._calibrate_status.setter("text_size"),
-        )
-        c.add_widget(self._calibrate_status)
-
-    # ---- camera tab actions -----------------------------------------------
-
-    def _cycle_camera_backend(self) -> None:
-        """Cycle through available camera backends."""
-        idx = (
-            self._backend_options.index(self._camera_backend)
-            if self._camera_backend in self._backend_options else -1
-        )
-        self._camera_backend = self._backend_options[(idx + 1) % len(self._backend_options)]
-        self._backend_value.text = self._backend_labels.get(
-            self._camera_backend, self._camera_backend,
-        )
-
-    def _cycle_iso(self) -> None:
-        """Cycle through ISO values."""
-        choices = self._dslr_iso_choices or ["auto", "100", "200", "400", "800", "1600", "3200", "6400"]
-        idx = choices.index(self._camera_iso) if self._camera_iso in choices else -1
-        self._camera_iso = choices[(idx + 1) % len(choices)]
-        self._iso_value.text = self._camera_iso
-        # Apply live if camera is gphoto2
-        self._apply_dslr_setting("iso", self._camera_iso)
-
-    def _cycle_aperture(self) -> None:
-        """Cycle through aperture values."""
-        choices = self._dslr_aperture_choices or ["", "2.8", "4", "5.6", "8", "11", "16"]
-        idx = choices.index(self._camera_aperture) if self._camera_aperture in choices else -1
-        self._camera_aperture = choices[(idx + 1) % len(choices)]
-        self._aperture_value.text = f"f/{self._camera_aperture}" if self._camera_aperture else "auto"
-        if self._camera_aperture:
-            self._apply_dslr_setting("aperture", self._camera_aperture)
-
-    def _cycle_shutter(self) -> None:
-        """Cycle through shutter speed values."""
-        choices = self._dslr_shutter_choices or [
-            "auto", "1/8", "1/15", "1/30", "1/60", "1/125", "1/250", "1/500",
-        ]
-        idx = choices.index(self._camera_shutter) if self._camera_shutter in choices else -1
-        self._camera_shutter = choices[(idx + 1) % len(choices)]
-        self._shutter_value.text = self._camera_shutter
-        self._apply_dslr_setting("shutterspeed", self._camera_shutter)
-
-    def _adjust_fps(self, delta: int) -> None:
-        """Adjust preview FPS."""
-        self._camera_fps = max(5, min(30, self._camera_fps + delta))
-        self._fps_value.text = str(self._camera_fps)
-
-    def _apply_dslr_setting(self, name: str, value: str) -> None:
-        """Apply a setting to the connected DSLR (if active)."""
-        if not self.camera:
-            return
-        if not hasattr(self.camera, "set_config_value"):
-            return
-        if value in ("auto", ""):
-            return
-        try:
-            self.camera.set_config_value(name, value)
-        except Exception as e:
-            logger.warning("Failed to apply DSLR setting %s=%s: %s", name, value, e)
-
-    def _load_dslr_choices(self) -> None:
-        """Load available ISO/aperture/shutter choices from the connected camera."""
-        if not self.camera or not hasattr(self.camera, "get_config_choices"):
-            return
-
-        import threading
-
-        def _load():
-            try:
-                self._dslr_iso_choices = ["auto"] + self.camera.get_config_choices("iso")
-                self._dslr_aperture_choices = [""] + self.camera.get_config_choices("aperture")
-                self._dslr_shutter_choices = ["auto"] + self.camera.get_config_choices("shutterspeed")
-
-                # Also read current values from the camera
-                iso = self.camera.get_config_value("iso")
-                aperture = self.camera.get_config_value("aperture")
-                shutter = self.camera.get_config_value("shutterspeed")
-
-                def _update(dt):
-                    if iso:
-                        self._camera_iso = iso
-                        self._iso_value.text = iso
-                    if aperture:
-                        self._camera_aperture = aperture
-                        self._aperture_value.text = f"f/{aperture}"
-                    if shutter:
-                        self._camera_shutter = shutter
-                        self._shutter_value.text = shutter
-                    logger.info(
-                        "DSLR choices loaded: %d ISOs, %d apertures, %d shutters",
-                        len(self._dslr_iso_choices),
-                        len(self._dslr_aperture_choices),
-                        len(self._dslr_shutter_choices),
-                    )
-                Clock.schedule_once(_update, 0)
-            except Exception as e:
-                logger.warning("Failed to load DSLR choices: %s", e)
-
-        threading.Thread(target=_load, daemon=True).start()
-
-    def _run_auto_exposure(self) -> None:
-        """Run auto-exposure calibration in a background thread."""
-        if not self.camera or not hasattr(self.camera, "auto_calibrate_exposure"):
-            self._calibrate_status.text = self.t("settings.camera_not_found")
-            self._calibrate_status.color = self.theme.colors.secondary
-            return
-
-        self._calibrate_status.text = self.t("settings.camera_calibrating")
-        self._calibrate_status.color = self.theme.colors.text_muted
-        self._calibrate_btn.disabled = True
-
-        import threading
-
-        def _calibrate():
-            result = self.camera.auto_calibrate_exposure()
-
-            def _update(dt):
-                self._calibrate_btn.disabled = False
-                if result.success:
-                    self._calibrate_status.text = self.t(
-                        "settings.camera_calibrated",
-                        iso=result.iso,
-                        aperture=result.aperture,
-                        shutter=result.shutter_speed,
-                    )
-                    self._calibrate_status.color = self.theme.colors.success
-                    # Update UI values
-                    self._camera_iso = result.iso
-                    self._iso_value.text = result.iso
-                    self._camera_aperture = result.aperture
-                    self._aperture_value.text = f"f/{result.aperture}"
-                    self._camera_shutter = result.shutter_speed
-                    self._shutter_value.text = result.shutter_speed
-                else:
-                    self._calibrate_status.text = self.t("settings.camera_calibrate_failed")
-                    self._calibrate_status.color = self.theme.colors.secondary
-
-            Clock.schedule_once(_update, 0)
-
-        threading.Thread(target=_calibrate, daemon=True).start()
-
-    def _schedule_preview_update(self) -> None:
-        """Debounce preview updates — wait 0.4s after last slider change."""
-        if self._preview_update_event:
-            self._preview_update_event.cancel()
-        self._preview_update_event = Clock.schedule_once(
-            lambda dt: self._update_preview(), 0.4,
-        )
-
-    def _update_preview(self) -> None:
-        """Run glamour pipeline on the dummy image in a background thread."""
-        if not self._preview_base_jpeg:
-            return
-
-        # Show spinner
-        self._preview_spinner.opacity = 1
-
-        import threading
-
-        def _process():
-            from photobooth.services.processing import glamour_enhance, GlamourParams
-            params = GlamourParams(
-                skin_smooth=self._glamour_skin,
-                warmth=self._glamour_warmth,
-                vignette=self._glamour_vignette,
-                eye_enhance=self._glamour_eyes,
-                makeup=self._glamour_makeup,
-                sparkles=self._glamour_sparkles,
-                soft_glow=self._glamour_glow,
+    def _build_event_card(self, cell: FloatLayout) -> None:
+        """Draw the surface background + labels for the event info card."""
+        with cell.canvas.before:
+            Color(*self.theme.colors.surface)
+            self._card_rect = RoundedRectangle(
+                pos=cell.pos, size=cell.size, radius=[16],
             )
-            try:
-                result = glamour_enhance(self._preview_base_jpeg, params)
-            except Exception:
-                result = self._preview_base_jpeg
-            Clock.schedule_once(lambda dt: self._on_preview_done(result), 0)
 
-        threading.Thread(target=_process, daemon=True).start()
+        def _sync(*_a):
+            self._card_rect.pos = cell.pos
+            self._card_rect.size = cell.size
+        cell.bind(pos=_sync, size=_sync)
 
-    def _on_preview_done(self, jpeg_data: bytes) -> None:
-        """Update the preview image with processed result."""
-        self._preview_spinner.opacity = 0
-        self._load_preview_texture(jpeg_data)
-
-    def _load_preview_texture(self, jpeg_data: bytes) -> None:
-        """Load JPEG bytes into the preview Image widget."""
-        from PIL import Image as PILImage
-        from kivy.graphics.texture import Texture
-
-        try:
-            pil_img = PILImage.open(io.BytesIO(jpeg_data)).convert("RGBA")
-            tex = Texture.create(size=pil_img.size, colorfmt="rgba")
-            tex.blit_buffer(pil_img.tobytes(), colorfmt="rgba", bufferfmt="ubyte")
-            tex.flip_vertical()
-            self._preview_image.texture = tex
-        except Exception:
-            pass
-
-    # ---- tab switching ----------------------------------------------------
-
-    def _switch_tab(self, tab: str) -> None:
-        """Switch between 'general', 'effects' and 'camera' tabs."""
-        if tab == self._active_tab:
-            return
-        self._active_tab = tab
-
-        # Map of containers and tab buttons
-        containers = {
-            "general": self._general_container,
-            "effects": self._effects_container,
-            "camera": self._camera_container,
-        }
-        buttons = {
-            "general": self._tab_general,
-            "effects": self._tab_effects,
-            "camera": self._tab_camera,
-        }
-
-        for name, container in containers.items():
-            if name == tab:
-                container.opacity = 1
-                container.disabled = False
-                buttons[name].variant = "primary"
-            else:
-                container.opacity = 0
-                container.disabled = True
-                buttons[name].variant = "ghost"
-
-        # Rebuild button visuals
-        for btn in buttons.values():
-            btn._update_colors()
-
-    # ---- builders for interactive controls --------------------------------
-
-    def _add_cycle_button(self, container, cx: float, cy: float, callback) -> None:
-        """Add a small rounded button that cycles a value."""
-        container.add_widget(BoothIconButton(
-            text=">",
-            theme=self.theme,
-            on_press=callback,
-            font_size="18sp",
-            size_hint=(0.08, 0.08),
-            pos_hint={"center_x": cx, "center_y": cy},
+        cell.add_widget(Label(
+            text=self.t("event.current"),
+            font_size=self.theme.typography.body_size,
+            color=self.theme.colors.text_muted,
+            halign="center", valign="middle",
+            size_hint=(0.86, 0.18),
+            pos_hint={"center_x": 0.5, "center_y": 0.82},
         ))
 
-    def _add_stepper(self, container, minus_cx: float, plus_cx: float, cy: float,
-                     minus_cb, plus_cb) -> None:
-        """Add a pair of - / + buttons."""
-        container.add_widget(BoothIconButton(
-            text="-",
-            theme=self.theme,
-            on_press=minus_cb,
-            size_hint=(0.06, 0.08),
-            pos_hint={"center_x": minus_cx, "center_y": cy},
-        ))
-        container.add_widget(BoothIconButton(
-            text="+",
-            theme=self.theme,
-            on_press=plus_cb,
-            size_hint=(0.06, 0.08),
-            pos_hint={"center_x": plus_cx, "center_y": cy},
-        ))
+        self._event_name_lbl = Label(
+            text="",
+            font_size=self.theme.typography.subtitle_size,
+            bold=True, color=self.theme.colors.primary_light,
+            halign="center", valign="middle",
+            size_hint=(0.86, 0.34),
+            pos_hint={"center_x": 0.5, "center_y": 0.52},
+        )
+        self._event_name_lbl.bind(size=self._event_name_lbl.setter("text_size"))
+        cell.add_widget(self._event_name_lbl)
+
+        self._event_stats_lbl = Label(
+            text="",
+            font_size="15sp",
+            color=self.theme.colors.text_muted,
+            halign="center", valign="middle",
+            size_hint=(0.86, 0.18),
+            pos_hint={"center_x": 0.5, "center_y": 0.22},
+        )
+        self._event_stats_lbl.bind(size=self._event_stats_lbl.setter("text_size"))
+        cell.add_widget(self._event_stats_lbl)
 
     # ---- lifecycle --------------------------------------------------------
 
-    def on_pre_enter(self, *args) -> None:
-        super().on_pre_enter(*args)
-        # Reload current values from SQLite each time we enter
-        if self.storage:
-            self._language = self.storage.get_setting(
-                "app.language",
-                self.config.app.language if self.config else "nl",
-            )
-            self._theme_name = self.storage.get_setting(
-                "app.theme",
-                self.config.app.theme if self.config else "classic",
-            )
-            self._first_countdown = int(self.storage.get_setting(
-                "countdown.first_countdown",
-                str(self.config.countdown.first_countdown) if self.config else "5",
-            ))
-            self._between_shots = int(self.storage.get_setting(
-                "countdown.between_shots",
-                str(self.config.countdown.between_shots) if self.config else "3",
-            ))
-            # Glamour settings
-            glamour = self.config.glamour if self.config else None
-            self._glamour_skin = float(self.storage.get_setting(
-                "glamour.skin_smooth",
-                str(glamour.skin_smooth) if glamour else "0.7",
-            ))
-            self._glamour_warmth = float(self.storage.get_setting(
-                "glamour.warmth",
-                str(glamour.warmth) if glamour else "0.5",
-            ))
-            self._glamour_vignette = float(self.storage.get_setting(
-                "glamour.vignette",
-                str(glamour.vignette) if glamour else "0.5",
-            ))
-            self._glamour_eyes = float(self.storage.get_setting(
-                "glamour.eye_enhance",
-                str(glamour.eye_enhance) if glamour else "0.5",
-            ))
-            self._glamour_makeup = float(self.storage.get_setting(
-                "glamour.makeup",
-                str(glamour.makeup) if glamour else "0.5",
-            ))
-            self._glamour_sparkles = float(self.storage.get_setting(
-                "glamour.sparkles",
-                str(glamour.sparkles) if glamour else "0.3",
-            ))
-            self._glamour_glow = float(self.storage.get_setting(
-                "glamour.soft_glow",
-                str(glamour.soft_glow) if glamour else "0.4",
-            ))
-
-        self._original_language = self._language
-        self._original_theme = self._theme_name
-        # Track original camera backend for restart detection
-        self._original_camera_backend = self.storage.get_setting(
-            "camera.backend",
-            self.config.camera.backend if self.config else "webcam",
-        ) if self.storage else "webcam"
-
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
+        self._refresh_event_card()
 
-        # Reset pending event state — show current DB state
-        self._pending_event_name = None
-        self._update_event_display()
-
-        # Update settings UI
-        self._lang_value.text = self._language.upper()
-        self._theme_value.text = self._theme_name
-        self._first_cd_label.text = self.t("settings.seconds", n=str(self._first_countdown))
-        self._between_label.text = self.t("settings.seconds", n=str(self._between_shots))
-        self._status_label.text = ""
-
-        # Update sliders
-        self._skin_slider.value = self._glamour_skin
-        self._warmth_slider.value = self._glamour_warmth
-        self._vignette_slider.value = self._glamour_vignette
-        self._eyes_slider.value = self._glamour_eyes
-        self._makeup_slider.value = self._glamour_makeup
-        self._glow_slider.value = self._glamour_glow
-        self._sparkles_slider.value = self._glamour_sparkles
-
-        # Trigger initial preview with current settings
-        self._schedule_preview_update()
-
-        # Load DSLR choices from connected camera (if gphoto2)
-        if hasattr(self.camera, "get_config_choices"):
-            self._load_dslr_choices()
-
-        # Global stats
+    def _refresh_event_card(self) -> None:
+        """Show the currently coupled (active) event, if any."""
+        name = None
+        stats = ""
         if self.storage:
-            self._stats_label.text = self.t(
-                "settings.stats",
-                sessions=str(self.storage.get_session_count()),
-                photos=str(self.storage.get_photo_count()),
-            )
-
-        self._switch_tab("general")
-
-    # ---- actions ----------------------------------------------------------
-
-    def _cycle_language(self) -> None:
-        langs = self._available_languages
-        if not langs:
-            return
-        idx = langs.index(self._language) if self._language in langs else -1
-        self._language = langs[(idx + 1) % len(langs)]
-        self._lang_value.text = self._language.upper()
-
-    def _cycle_theme(self) -> None:
-        themes = self._available_themes
-        if not themes:
-            return
-        idx = themes.index(self._theme_name) if self._theme_name in themes else -1
-        self._theme_name = themes[(idx + 1) % len(themes)]
-        self._theme_value.text = self._theme_name
-
-    def _adjust_countdown(self, which: str, delta: int) -> None:
-        if which == "first":
-            self._first_countdown = max(3, min(10, self._first_countdown + delta))
-            self._first_cd_label.text = self.t(
-                "settings.seconds", n=str(self._first_countdown),
-            )
-        else:
-            self._between_shots = max(2, min(5, self._between_shots + delta))
-            self._between_label.text = self.t(
-                "settings.seconds", n=str(self._between_shots),
-            )
-
-    def _save_settings(self) -> None:
-        """Persist all settings to SQLite, including pending event."""
-        if not self.storage:
-            return
-
-        # --- Handle pending event ---
-        if self._pending_event_name is not None:
-            name = self._pending_event_name.strip()
-            if name:
-                # Validate uniqueness
-                if self.storage.event_name_exists(name):
-                    self._status_label.text = self.t("event.name_exists")
-                    self._status_label.color = self.theme.colors.secondary
-                    return
-                try:
-                    event_id = self.storage.create_event(name)
-                    _session.event_id = event_id
-                    self._pending_event_name = None
-                    logger.info("Event created on save: %r (id=%d)", name, event_id)
-                except ValueError as e:
-                    self._status_label.text = str(e)
-                    self._status_label.color = self.theme.colors.secondary
-                    return
-            else:
-                # Empty name means reset
-                self.storage.reset_active_event()
-                _session.event_id = None
-                self._pending_event_name = None
-                logger.info("Event reset on save")
-
-        # --- Persist remaining settings ---
-        self.storage.set_setting("app.language", self._language)
-        self.storage.set_setting("app.theme", self._theme_name)
-        self.storage.set_setting("countdown.first_countdown", str(self._first_countdown))
-        self.storage.set_setting("countdown.between_shots", str(self._between_shots))
-
-        # Glamour settings
-        self.storage.set_setting("glamour.skin_smooth", str(round(self._glamour_skin, 2)))
-        self.storage.set_setting("glamour.warmth", str(round(self._glamour_warmth, 2)))
-        self.storage.set_setting("glamour.vignette", str(round(self._glamour_vignette, 2)))
-        self.storage.set_setting("glamour.eye_enhance", str(round(self._glamour_eyes, 2)))
-        self.storage.set_setting("glamour.makeup", str(round(self._glamour_makeup, 2)))
-        self.storage.set_setting("glamour.sparkles", str(round(self._glamour_sparkles, 2)))
-        self.storage.set_setting("glamour.soft_glow", str(round(self._glamour_glow, 2)))
-
-        # Camera settings
-        self.storage.set_setting("camera.backend", self._camera_backend)
-        self.storage.set_setting("camera.iso", self._camera_iso)
-        self.storage.set_setting("camera.aperture", self._camera_aperture)
-        self.storage.set_setting("camera.shutter_speed", self._camera_shutter)
-        self.storage.set_setting("camera.preview_fps", str(self._camera_fps))
-
-        logger.info("Settings saved to database")
-
-        # Check if language, theme, or camera backend changed — needs restart
-        needs_restart = (
-            self._language != self._original_language
-            or self._theme_name != self._original_theme
-            or self._camera_backend != self._original_camera_backend
-        )
-
-        if needs_restart:
-            self._status_label.text = self.t("settings.restarting")
-            self._status_label.color = self.theme.colors.secondary
-            Clock.schedule_once(self._do_restart, 1.0)
-        else:
-            # Apply config changes immediately for non-restart settings
-            self._apply_config_updates()
-            self._update_event_display()
-            self._status_label.text = self.t("settings.saved")
-            self._status_label.color = self.theme.colors.success
-
-    # ---- event management -------------------------------------------------
-
-    def _update_event_display(self) -> None:
-        """Toggle between State A (name + reset) and State B (new event button).
-
-        If there's a pending event name or an active event from DB,
-        show State A.  Otherwise show State B.
-        """
-        # Determine the display name (pending takes priority over DB)
-        display_name = None
-        event_stats = ""
-
-        if self._pending_event_name is not None:
-            # User typed a name but hasn't saved yet
-            if self._pending_event_name.strip():
-                display_name = self._pending_event_name
-                event_stats = self.t("event.unsaved")
-            # else: pending is empty string = "reset", show State B
-        elif self.storage:
             active = self.storage.get_active_event()
             if active:
-                display_name = active["name"]
+                name = active["name"]
                 sessions = self.storage.get_event_session_count(active["id"])
                 photos = self.storage.get_event_photo_count(active["id"])
-                event_stats = self.t(
+                stats = self.t(
                     "event.event_stats",
                     sessions=str(sessions), photos=str(photos),
                 )
+        self._event_name_lbl.text = name or self.t("event.no_event")
+        self._event_stats_lbl.text = stats
 
-        if display_name:
-            # State A: show name + reset icon
-            self._event_name_label.text = display_name
-            self._event_stats_label.text = event_stats
-            self._event_name_area.opacity = 1
-            self._event_name_area.disabled = False
-            self._new_event_btn.opacity = 0
-            self._new_event_btn.disabled = True
-        else:
-            # State B: show "Nieuw Event" button
-            self._event_name_area.opacity = 0
-            self._event_name_area.disabled = True
-            self._new_event_btn.opacity = 1
-            self._new_event_btn.disabled = False
-
-    def _open_event_keyboard(self) -> None:
-        """Open the on-screen keyboard for event name entry."""
-        from photobooth.ui.components import BoothKeyboard
-
-        def _on_done(text: str) -> None:
-            self._pending_event_name = text.strip() if text.strip() else None
-            if text.strip():
-                self._pending_event_name = text.strip()
-            else:
-                self._pending_event_name = None
-            self._update_event_display()
-
-        keyboard = BoothKeyboard(
-            theme=self.theme,
-            on_done=_on_done,
-            on_cancel=lambda: None,
-            placeholder=self.t("event.create_placeholder"),
-            initial_text=self._pending_event_name or "",
-        )
-        self.add_widget(keyboard)
-
-    def _reset_event_name(self) -> None:
-        """Clear the event name (pending reset, saved on Save)."""
-        self._pending_event_name = ""  # Empty string = "to be reset"
-        self._update_event_display()
-
-    def _apply_config_updates(self) -> None:
-        """Apply settings that don't require a restart."""
-        from photobooth.config import apply_overrides
-
-        if not self.config or not self.storage:
-            return
-
-        overrides = self.storage.get_all_settings()
-        from kivy.app import App
-        app = App.get_running_app()
-        if app and hasattr(app, "_booth_config"):
-            app._booth_config = apply_overrides(app._booth_config, overrides)
-            # Update our local config reference
-            self.config = app._booth_config
+    # ---- actions ----------------------------------------------------------
 
     def _do_restart(self, _dt) -> None:
         """Restart the Kivy app — cleans up LED DMA before exec."""
@@ -4143,19 +3129,19 @@ class SettingsScreen(BaseBoothScreen):
         os.execv(sys.executable, [sys.executable, "-m", "photobooth"])
 
     def _restart_app(self) -> None:
-        """Manual restart from settings button."""
+        """Manual restart from the settings button."""
         logger.info("Manual restart requested from settings")
         Clock.schedule_once(self._do_restart, 0.2)
 
     def _go_back(self) -> None:
-        """Navigate back — checks if event exists to determine target."""
+        """Navigate back — to idle if an event is active, else event-required."""
         if self.storage:
             active = self.storage.get_active_event()
             if active:
                 _session.event_id = active["id"]
                 self.navigate_to(SCREEN_IDLE)
                 return
-        # No active event — go to event required screen
+        # No active event — go to the event-required screen.
         self.navigate_to(SCREEN_EVENT_REQUIRED)
 
 

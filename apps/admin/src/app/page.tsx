@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { authFetch, clearTokens, isLoggedIn } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
 import {
-  Button, Badge, Card, Modal, Toast, EmptyState, Spinner, Input, Select,
+  Button, Badge, Card, Modal, Toast, EmptyState, Spinner, Input,
 } from "@/app/components/ui";
 import {
   Plus, Key, Trash2, Copy, Camera, Cpu, Clock, Eye, Check, X as XIcon, AlertTriangle,
@@ -168,22 +168,6 @@ export default function DashboardPage() {
     }
   }
 
-  /* ---- Update Event Coupling ---- */
-  async function handleEventChange(boothId: string, eventId: string) {
-    try {
-      const res = await authFetch(`/api/api/booths/${boothId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: eventId || null }),
-      });
-      if (!res.ok) throw new Error("Failed to update booth");
-      showToast("Event gekoppeld");
-      await fetchData();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error");
-    }
-  }
-
   /* ---- Delete Booth ---- */
   async function handleDeleteBooth(boothId: string) {
     if (!confirm(`Booth "${boothId}" verwijderen?`)) return;
@@ -204,6 +188,16 @@ export default function DashboardPage() {
     const ev = events.find((e) => e.id === eventId);
     return ev ? ev.name : "";
   }
+
+  /* ---- Sort: online first, then most recently seen ---- */
+  const sortedBooths = [...booths].sort((a, b) => {
+    const aOnline = a.status === "online" ? 1 : 0;
+    const bOnline = b.status === "online" ? 1 : 0;
+    if (aOnline !== bOnline) return bOnline - aOnline;
+    const at = a.last_seen ? new Date(a.last_seen).getTime() : 0;
+    const bt = b.last_seen ? new Date(b.last_seen).getTime() : 0;
+    return bt - at;
+  });
 
   /* ---- Render ---- */
   return (
@@ -241,7 +235,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {booths.map((booth) => (
+            {sortedBooths.map((booth) => (
               <Card key={booth.id} hover>
                 {/* Status header */}
                 <div className="flex items-center justify-between mb-4">
@@ -291,31 +285,14 @@ export default function DashboardPage() {
                   <p className="text-xs text-[var(--muted-light)] font-mono mb-4">{booth.booth_id}</p>
                 </div>
 
-                {/* Event coupling */}
-                <Select
-                  label="Event"
-                  value={booth.event_id || ""}
-                  onChange={(e) => handleEventChange(booth.booth_id, e.target.value)}
-                  wrapperClassName="mb-4"
-                >
-                  <option value="">Geen event</option>
-                  {events
-                    .filter((ev) => ev.is_active)
-                    .map((ev) => (
-                      <option key={ev.id} value={ev.id}>
-                        {ev.name}
-                      </option>
-                    ))}
-                </Select>
-
-                {/* Stats */}
+                {/* Stats — only meaningful while the booth is online */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="text-xs text-[var(--muted-light)] mb-0.5 flex items-center gap-1">
                       <Cpu className="w-3 h-3" /> CPU
                     </p>
                     <p className="text-sm font-medium text-[var(--foreground)]">
-                      {booth.cpu_percent != null ? `${booth.cpu_percent}%` : "—"}
+                      {booth.status === "online" && booth.cpu_percent != null ? `${booth.cpu_percent}%` : "—"}
                     </p>
                   </div>
                   <div>
@@ -323,7 +300,9 @@ export default function DashboardPage() {
                       <Camera className="w-3 h-3" /> Camera
                     </p>
                     <p className="text-sm font-medium">
-                      {booth.camera_connected ? (
+                      {booth.status !== "online" ? (
+                        <span className="text-[var(--muted-light)]">—</span>
+                      ) : booth.camera_connected ? (
                         <Check className="w-4 h-4 text-emerald-500 inline" />
                       ) : (
                         <XIcon className="w-4 h-4 text-[var(--muted-light)] inline" />
@@ -335,7 +314,7 @@ export default function DashboardPage() {
                       <Clock className="w-3 h-3" /> Uptime
                     </p>
                     <p className="text-sm font-medium text-[var(--foreground)]">
-                      {formatUptime(booth.uptime_seconds)}
+                      {booth.status === "online" ? formatUptime(booth.uptime_seconds) : "—"}
                     </p>
                   </div>
                 </div>

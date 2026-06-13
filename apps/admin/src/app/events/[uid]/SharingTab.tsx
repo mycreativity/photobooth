@@ -19,7 +19,7 @@ export default function SharingTab({ event, onCopy }: SharingTabProps) {
         <div className="flex flex-col sm:flex-row gap-6 items-start">
           {/* QR Code */}
           <div className="w-full sm:w-auto sm:shrink-0 flex justify-center">
-            <div className="p-4 bg-white rounded-xl shadow-lg">
+            <div className="p-4 bg-white rounded-xl border border-[var(--card-border)]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicUrl)}`}

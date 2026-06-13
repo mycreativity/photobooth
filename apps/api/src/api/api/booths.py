@@ -1,4 +1,5 @@
 """Booth management API endpoints."""
+import asyncio
 import logging
 from typing import Annotated
 
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth.permissions import CurrentUser, require_role
 from api.database import get_db
-from api.models.db import Booth, generate_api_key, hash_api_key
+from api.models.db import Booth, Event, generate_api_key, hash_api_key
 from api.models.schemas import BoothCreate, BoothCreatedOut, BoothOut, BoothUpdate
 from api.ws.hub import hub
 
@@ -232,6 +233,22 @@ async def restart_booth(
     return {"message": "Restart command sent", "booth_id": booth_id}
 
 
+@router.post("/{booth_id}/reboot")
+async def reboot_booth(
+    booth_id: str,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+):
+    """Send a full system reboot command to a booth's Raspberry Pi."""
+    if not hub.is_booth_connected(booth_id):
+        raise HTTPException(status_code=503, detail="Booth is offline")
+
+    sent = await hub.send_to_booth(booth_id, {"type": "reboot"})
+    if not sent:
+        raise HTTPException(status_code=503, detail="Failed to send to booth")
+
+    return {"message": "Reboot command sent", "booth_id": booth_id}
+
+
 @router.delete("/{booth_id}")
 async def delete_booth(
     booth_id: str,
@@ -326,4 +343,69 @@ async def push_event_to_booth(
         "booth_id": booth_id,
         "event_uid": event.uid,
     }
+
+
+@router.post("/{booth_id}/sync-event")
+async def sync_event_to_booth(
+    booth_id: str,
+    body: BoothUpdate,
+    user: Annotated[CurrentUser, Depends(require_role("admin"))],
+    db: AsyncSession = Depends(get_db),
+):
+    """Couple an event to a booth and synchronise it to the device.
+
+    Unlike a plain update, the event coupling is only persisted once the
+    booth confirms it has downloaded and applied all event data. The booth
+    must be online. Progress is streamed to admins over the booth WS.
+    """
+    result = await db.execute(select(Booth).where(Booth.booth_id == booth_id))
+    booth = result.scalar_one_or_none()
+    if not booth:
+        raise HTTPException(status_code=404, detail="Booth not found")
+
+    event_id = body.event_id
+
+    # Clearing the coupling needs no device sync — persist directly.
+    if not event_id:
+        booth.event_id = None
+        await db.commit()
+        return {"status": "ok", "cleared": True}
+
+    if not hub.is_booth_connected(booth_id):
+        raise HTTPException(status_code=503, detail="Booth is offline")
+
+    ev_result = await db.execute(select(Event).where(Event.id == event_id))
+    event = ev_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    push_data = build_push_event_data(event)
+
+    # Wait for the booth's event_synced confirmation before persisting.
+    waiter = hub.create_sync_waiter(booth_id)
+    sent = await hub.send_to_booth(booth_id, push_data)
+    if not sent:
+        hub.cancel_sync_waiter(booth_id)
+        raise HTTPException(status_code=503, detail="Failed to send to booth")
+
+    try:
+        sync_result = await asyncio.wait_for(waiter, timeout=60)
+    except asyncio.TimeoutError:
+        hub.cancel_sync_waiter(booth_id)
+        raise HTTPException(
+            status_code=504,
+            detail="Booth reageerde niet binnen 60 seconden",
+        )
+
+    if sync_result.get("status") != "ok":
+        raise HTTPException(
+            status_code=502,
+            detail=f"Synchronisatie mislukt: {sync_result.get('error') or 'onbekende fout'}",
+        )
+
+    # Confirmed — persist the coupling.
+    booth.event_id = event_id
+    await db.commit()
+    logger.info("Event %s synced & coupled to booth %s", event.uid, booth_id)
+    return {"status": "ok", "event_uid": event.uid}
 

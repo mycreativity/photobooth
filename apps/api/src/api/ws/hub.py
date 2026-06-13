@@ -29,6 +29,8 @@ class ConnectionHub:
         self._booth_info: dict[str, dict] = {}
         # booth_id → log ring buffer (last N log lines)
         self._booth_logs: dict[str, deque] = {}
+        # booth_id → pending event-sync future (resolved by booth's event_synced)
+        self._sync_waiters: dict[str, asyncio.Future] = {}
 
     @property
     def connected_booths(self) -> list[str]:
@@ -98,6 +100,45 @@ class ConnectionHub:
             except Exception:
                 dead.add(ws)
 
+        for ws in dead:
+            viewers.discard(ws)
+
+    def create_sync_waiter(self, booth_id: str) -> asyncio.Future:
+        """Create a future that resolves when the booth confirms an event sync.
+
+        Cancels any previous waiter for the same booth (only one sync at a time).
+        """
+        old = self._sync_waiters.get(booth_id)
+        if old and not old.done():
+            old.cancel()
+        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        self._sync_waiters[booth_id] = fut
+        return fut
+
+    def resolve_sync(self, booth_id: str, result: dict) -> None:
+        """Resolve a pending event-sync future with the booth's result (if any)."""
+        fut = self._sync_waiters.pop(booth_id, None)
+        if fut and not fut.done():
+            fut.set_result(result)
+
+    def cancel_sync_waiter(self, booth_id: str) -> None:
+        """Drop a pending sync waiter (e.g. when sending failed)."""
+        fut = self._sync_waiters.pop(booth_id, None)
+        if fut and not fut.done():
+            fut.cancel()
+
+    async def relay_sync_progress(self, booth_id: str, payload: dict) -> None:
+        """Send an event-sync progress update to all admin viewers."""
+        viewers = self._admin_viewers.get(booth_id, set())
+        if not viewers:
+            return
+        dead = set()
+        msg = {"type": "sync_progress", "booth_id": booth_id, **payload}
+        for ws in viewers:
+            try:
+                await ws.send_json(msg)
+            except Exception:
+                dead.add(ws)
         for ws in dead:
             viewers.discard(ws)
 
