@@ -69,6 +69,7 @@ class BoothButton(FloatLayout):
         toggled: bool = False,
         font_size: str | None = None,
         radius: int = 16,
+        text_color=None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -83,7 +84,7 @@ class BoothButton(FloatLayout):
         self._bg_color_toggled = theme.colors.primary
         self._border_color_normal = self._resolve_border_color(variant)
         self._border_color_toggled = theme.colors.primary
-        self._text_color = self._resolve_text_color(variant)
+        self._text_color = text_color if text_color is not None else self._resolve_text_color(variant)
         self._text_color_toggled = (1, 1, 1, 1)  # White on accent
 
         # Determine active state

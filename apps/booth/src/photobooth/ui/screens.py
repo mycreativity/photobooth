@@ -1111,6 +1111,28 @@ class EventRequiredScreen(BaseBoothScreen):
         self.navigate_to(SCREEN_SETTINGS)
 
 
+def read_pushed_event() -> dict | None:
+    """Return the event pushed from the admin (cached in event_card.json).
+
+    Returns the parsed dict (event_uid, event_name, display_date, …) or
+    ``None`` when no event has been pushed / the cache is unreadable.
+    """
+    import json
+    from pathlib import Path
+
+    data_dir = Path("/opt/photobooth/data")
+    if not data_dir.exists():
+        data_dir = Path("data")
+    card_path = data_dir / "event_card.json"
+    if not card_path.exists():
+        return None
+    try:
+        card = json.loads(card_path.read_text())
+    except Exception:
+        return None
+    return card if card.get("event_name") else None
+
+
 class IdleScreen(BaseBoothScreen):
     """Welcome screen — massive pulsing CTA, 5s long-press for settings.
 
@@ -1122,6 +1144,16 @@ class IdleScreen(BaseBoothScreen):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_IDLE, **kwargs)
+
+        # Coupled-event name (top of screen) — filled in on_enter.
+        self._event_label = Label(
+            text="",
+            font_size=self.theme.typography.subtitle_size,
+            bold=True,
+            color=self.theme.colors.primary_light,
+            pos_hint={"center_x": 0.5, "center_y": 0.9},
+        )
+        self.add_widget(self._event_label)
 
         # Title — bright white, large
         title = Label(
@@ -1189,6 +1221,9 @@ class IdleScreen(BaseBoothScreen):
 
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
+        # Show the coupled (admin-pushed) event, if any
+        event = read_pushed_event()
+        self._event_label.text = event["event_name"] if event else self.t("event.no_event")
         # Reset session state
         _session.reset()
         # Ensure camera preview is stopped and video resumes
@@ -2991,6 +3026,10 @@ class SettingsScreen(BaseBoothScreen):
         )
         self.add_widget(grid)
 
+        # Dark text reads better than white on the opaque gold blocks
+        # (unlike the idle start button, which sits over the live preview).
+        dark_text = self.theme.colors.background
+
         # Block 1 — Back
         grid.add_widget(BoothButton(
             text=self.t("settings.back"),
@@ -2998,6 +3037,7 @@ class SettingsScreen(BaseBoothScreen):
             variant="primary",
             on_press=self._go_back,
             size_hint=(1, 1),
+            text_color=dark_text,
         ))
 
         # Block 2 — pushed-event info card
@@ -3010,6 +3050,7 @@ class SettingsScreen(BaseBoothScreen):
             variant="primary",
             on_press=self._restart_app,
             size_hint=(1, 1),
+            text_color=dark_text,
         ))
 
         # Blocks 4–6 — intentionally empty (reserved for future controls).
@@ -3039,10 +3080,12 @@ class SettingsScreen(BaseBoothScreen):
             self._card_rect.size = cell.size
         cell.bind(pos=_sync, size=_sync)
 
+        dark = self.theme.colors.background
+
         cell.add_widget(Label(
             text=self.t("event.current"),
             font_size=self.theme.typography.body_size,
-            color=(1, 1, 1, 0.8),
+            color=(*dark[:3], 0.75),
             halign="center", valign="middle",
             size_hint=(0.9, 0.16),
             pos_hint={"center_x": 0.5, "center_y": 0.85},
@@ -3051,7 +3094,7 @@ class SettingsScreen(BaseBoothScreen):
         self._event_name_lbl = Label(
             text="",
             font_size=self.theme.typography.subtitle_size,
-            bold=True, color=(1, 1, 1, 1),
+            bold=True, color=(*dark[:3], 1),
             halign="center", valign="middle",
             size_hint=(0.9, 0.28),
             pos_hint={"center_x": 0.5, "center_y": 0.60},
@@ -3062,7 +3105,7 @@ class SettingsScreen(BaseBoothScreen):
         self._event_meta_lbl = Label(
             text="",
             font_size="16sp",
-            color=(1, 1, 1, 0.85),
+            color=(*dark[:3], 0.9),
             halign="center", valign="top",
             size_hint=(0.9, 0.38),
             pos_hint={"center_x": 0.5, "center_y": 0.26},
@@ -3080,20 +3123,7 @@ class SettingsScreen(BaseBoothScreen):
 
     def _refresh_event_card(self) -> None:
         """Show the event pushed from the admin (cached in event_card.json)."""
-        import json
-        from pathlib import Path
-
-        data_dir = Path("/opt/photobooth/data")
-        if not data_dir.exists():
-            data_dir = Path("data")
-        card_path = data_dir / "event_card.json"
-
-        card = None
-        if card_path.exists():
-            try:
-                card = json.loads(card_path.read_text())
-            except Exception as e:
-                logger.warning("Could not read event_card.json: %s", e)
+        card = read_pushed_event()
 
         if card and card.get("event_name"):
             self._event_name_lbl.text = card.get("event_name", "")
