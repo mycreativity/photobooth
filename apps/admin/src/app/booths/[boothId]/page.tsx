@@ -16,6 +16,7 @@ interface BoothInfo {
   version: string | null;
   // System metrics
   cpu_percent: number | null;
+  cpu_cores: number[];
   camera_connected: boolean;
   uptime_seconds: number | null;
   mem_total_mb: number;
@@ -69,6 +70,57 @@ function formatLastSeen(iso: string | null): string {
   return d.toLocaleString("nl-NL");
 }
 
+// Distinct colours per CPU core (cycles if there are more cores than colours).
+const CPU_CORE_COLORS = ["#14b8a6", "#6366f1", "#f59e0b", "#ef4444", "#8b5cf6", "#10b981", "#ec4899", "#3b82f6"];
+
+// Small live multi-line chart: one line per CPU core, built from the
+// rolling history of heartbeat snapshots. History lives only in memory,
+// so it resets on page reload (by design).
+function CpuCoreChart({ history }: { history: number[][] }) {
+  const W = 200;
+  const H = 40;
+  const cores = history.reduce((max, snap) => Math.max(max, snap.length), 0);
+
+  if (cores === 0 || history.length < 2) {
+    return (
+      <div className="mt-2 h-10 flex items-center text-[10px] text-[var(--muted-light)]">
+        Grafiek wordt opgebouwd…
+      </div>
+    );
+  }
+
+  const n = history.length;
+  const x = (i: number) => (i / (n - 1)) * W;
+  const y = (v: number) => H - (Math.max(0, Math.min(v, 100)) / 100) * H;
+
+  return (
+    <div className="mt-2">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-10" role="img" aria-label="CPU-gebruik per core">
+        <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="var(--card-border)" strokeWidth="0.5" />
+        {Array.from({ length: cores }, (_, c) => (
+          <polyline
+            key={c}
+            points={history.map((snap, i) => `${x(i).toFixed(1)},${y(snap[c] ?? 0).toFixed(1)}`).join(" ")}
+            fill="none"
+            stroke={CPU_CORE_COLORS[c % CPU_CORE_COLORS.length]}
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+        {Array.from({ length: cores }, (_, c) => (
+          <span key={c} className="inline-flex items-center gap-1 text-[10px] text-[var(--muted-light)]">
+            <span className="inline-block w-2 h-[2px] rounded" style={{ background: CPU_CORE_COLORS[c % CPU_CORE_COLORS.length] }} />
+            C{c}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProgressBar({ percent, color = "teal" }: { percent: number; color?: string }) {
   const colorMap: Record<string, string> = {
     teal: "bg-[var(--accent)]",
@@ -108,6 +160,11 @@ export default function BoothDetailPage({
   const [logs, setLogs] = useState<Array<{level: string; message: string; logger: string; ts: string}>>([])
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const logWsRef = useRef<WebSocket | null>(null);
+  // Live per-core CPU history (in-memory; resets on reload). One snapshot
+  // per heartbeat, deduped on last_seen so polling doesn't add duplicates.
+  const [cpuHistory, setCpuHistory] = useState<number[][]>([]);
+  const lastCpuSeenRef = useRef<string | null>(null);
+  const CPU_HISTORY_MAX = 40;
 
   useEffect(() => {
     if (!isLoggedIn()) { router.replace("/login"); return; }
@@ -116,6 +173,9 @@ export default function BoothDetailPage({
 
   useEffect(() => {
     if (!boothId) return;
+    // Reset live CPU history when switching booths.
+    setCpuHistory([]);
+    lastCpuSeenRef.current = null;
     fetchBooth();
     fetchEvents();
     const interval = setInterval(fetchBooth, 5_000);
@@ -144,7 +204,18 @@ export default function BoothDetailPage({
       const res = await authFetch(`/api/api/booths/${boothId}/info`);
       if (res.status === 401) { clearTokens(); router.replace("/login"); return; }
       if (!res.ok) throw new Error("Booth not found");
-      setBooth(await res.json());
+      const data: BoothInfo = await res.json();
+      setBooth(data);
+      // Append one per-core snapshot per heartbeat (deduped on last_seen).
+      if (
+        data.status === "online" &&
+        Array.isArray(data.cpu_cores) &&
+        data.cpu_cores.length > 0 &&
+        data.last_seen !== lastCpuSeenRef.current
+      ) {
+        lastCpuSeenRef.current = data.last_seen;
+        setCpuHistory((h) => [...h, data.cpu_cores].slice(-CPU_HISTORY_MAX));
+      }
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
@@ -312,7 +383,9 @@ export default function BoothDetailPage({
       {/* Stats — combined into one block. Live metrics are only meaningful while online */}
       <div className="bg-white border border-[var(--card-border)] rounded-2xl p-5">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-5 divide-y divide-[var(--card-border)] md:divide-y-0 md:divide-x">
-          <Metric icon={<Cpu />} label="CPU" value={isOnline ? `${booth.cpu_percent ?? 0}%` : "—"} online={isOnline} percent={booth.cpu_percent ?? 0} />
+          <Metric icon={<Cpu />} label={isOnline && booth.cpu_cores?.length ? `CPU (${booth.cpu_cores.length} cores)` : "CPU"} value={isOnline ? `${booth.cpu_percent ?? 0}%` : "—"} online={isOnline} percent={booth.cpu_percent ?? 0}>
+            {isOnline && <CpuCoreChart history={cpuHistory} />}
+          </Metric>
           <Metric icon={<Thermometer />} label="Temperatuur" value={isOnline && booth.cpu_temp != null ? `${booth.cpu_temp}°C` : "—"} online={isOnline} valueColor={booth.cpu_temp && booth.cpu_temp > 70 ? "text-red-600" : booth.cpu_temp && booth.cpu_temp > 55 ? "text-amber-600" : undefined} />
           <Metric icon={<MemoryStick />} label="Geheugen" value={isOnline ? `${booth.mem_used_mb} / ${booth.mem_total_mb} MB` : "—"} online={isOnline} percent={booth.mem_percent} percentColor="teal" />
           <Metric icon={<HardDrive />} label="Schijf" value={isOnline ? `${booth.disk_used_gb} / ${booth.disk_total_gb} GB` : "—"} online={isOnline} percent={booth.disk_percent} percentColor="emerald" />
@@ -567,6 +640,7 @@ function Metric({
   percent,
   percentColor = "teal",
   valueColor,
+  children,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -575,6 +649,7 @@ function Metric({
   percent?: number;
   percentColor?: string;
   valueColor?: string;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="md:px-5 first:pl-0 last:pr-0 pt-5 first:pt-0 md:pt-0">
@@ -586,6 +661,7 @@ function Metric({
         {value}
       </p>
       {online && percent !== undefined && <ProgressBar percent={percent} color={percentColor} />}
+      {children}
     </div>
   );
 }
