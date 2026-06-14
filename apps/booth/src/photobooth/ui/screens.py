@@ -3278,28 +3278,36 @@ class SettingsScreen(BaseBoothScreen):
         self._bg_rect.size = self.size
 
     def _build_event_cell(self) -> FloatLayout:
-        """A yellow (accent) block showing the pushed event's details."""
+        """Inverted event card: black fill with yellow border."""
         cell = FloatLayout(size_hint=(1, 1))
 
+        accent = self.theme.colors.accent
+
         with cell.canvas.before:
-            Color(*self.theme.colors.accent_glow)
+            # Glow (accent at low alpha, slightly larger)
+            Color(*accent[:3], 0.20)
             self._card_glow = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[22])
-            Color(*self.theme.colors.accent)
-            self._card_rect = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[16])
+            # Border ring (accent fill)
+            Color(*accent[:3], 1.0)
+            self._card_border = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[16])
+            # Black fill inset by 3px
+            Color(0, 0, 0, 1)
+            self._card_rect = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[14])
 
         def _sync(*_a):
-            self._card_glow.pos = cell.pos
-            self._card_glow.size = cell.size
-            self._card_rect.pos = cell.pos
-            self._card_rect.size = cell.size
+            inset = 3
+            self._card_glow.pos = (cell.x - 4, cell.y - 4)
+            self._card_glow.size = (cell.width + 8, cell.height + 8)
+            self._card_border.pos = cell.pos
+            self._card_border.size = cell.size
+            self._card_rect.pos = (cell.x + inset, cell.y + inset)
+            self._card_rect.size = (cell.width - inset * 2, cell.height - inset * 2)
         cell.bind(pos=_sync, size=_sync)
-
-        dark = self.theme.colors.background
 
         cell.add_widget(Label(
             text=self.t("event.current"),
             font_size=self.theme.typography.body_size,
-            color=(*dark[:3], 0.75),
+            color=(*accent[:3], 0.75),
             halign="center", valign="middle",
             size_hint=(0.9, 0.16),
             pos_hint={"center_x": 0.5, "center_y": 0.85},
@@ -3308,7 +3316,7 @@ class SettingsScreen(BaseBoothScreen):
         self._event_name_lbl = Label(
             text="",
             font_size=self.theme.typography.subtitle_size,
-            bold=True, color=(*dark[:3], 1),
+            bold=True, color=(1, 1, 1, 1),
             halign="center", valign="middle",
             size_hint=(0.9, 0.28),
             pos_hint={"center_x": 0.5, "center_y": 0.60},
@@ -3319,7 +3327,7 @@ class SettingsScreen(BaseBoothScreen):
         self._event_meta_lbl = Label(
             text="",
             font_size="16sp",
-            color=(*dark[:3], 0.9),
+            color=(1, 1, 1, 0.75),
             halign="center", valign="top",
             size_hint=(0.9, 0.38),
             pos_hint={"center_x": 0.5, "center_y": 0.26},
