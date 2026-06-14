@@ -36,6 +36,7 @@
           - "--exclude=photobooth.db"
           - "--exclude=.kivy"
           - "--exclude=ansible"
+          - "--exclude=booth.toml"   # Device-local config (holds API key) — never overwrite
       become: false
 
     - name: Sync shared package

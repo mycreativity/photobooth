@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import threading
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,11 @@ if TYPE_CHECKING:
     from photobooth.ui.themes import ThemeData
 
 logger = logging.getLogger(__name__)
+
+# Absolute path to the booth's assets/ folder, works regardless of CWD.
+_ASSETS = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "assets")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -505,30 +511,8 @@ class BaseBoothScreen(Screen):
         self.preview_layer = preview_layer
         self.led = led
 
-        # Camera status indicator — small dot top-left
-        self._cam_dot = Widget(size_hint=(None, None), size=(12, 12),
-                               pos_hint={"x": 0.01, "top": 0.98})
-        with self._cam_dot.canvas:
-            self._cam_dot_color = Color(0.3, 0.3, 0.3, 0.8)
-            self._cam_dot_circle = Ellipse(
-                pos=self._cam_dot.pos, size=self._cam_dot.size)
-        self._cam_dot.bind(
-            pos=lambda w, p: setattr(self._cam_dot_circle, 'pos', p),
-            size=lambda w, s: setattr(self._cam_dot_circle, 'size', s))
-        self.add_widget(self._cam_dot)
-
     def _update_cam_dot(self, *_args) -> None:
-        """Set dot colour: green = camera connected, red = not."""
-        connected = False
-        if self.camera:
-            try:
-                connected = getattr(self.camera, '_camera', None) is not None
-            except Exception:
-                pass
-        if connected:
-            self._cam_dot_color.rgba = (0.2, 0.9, 0.2, 0.8)  # green
-        else:
-            self._cam_dot_color.rgba = (0.9, 0.2, 0.2, 0.8)  # red
+        pass  # Camera dot removed — status visible in admin panel
 
     def on_pre_enter(self, *args) -> None:
         self.opacity = 0
@@ -1229,17 +1213,42 @@ class IdleScreen(BaseBoothScreen):
         )
         self.add_widget(self._subtitle)
 
-        # Small settings icon — bottom-right, subtle but visible
-        self._settings_btn = BoothButton(
-            text="Instellingen",
-            theme=self.theme,
-            variant="ghost",
-            on_press=self._open_pincode,
-            font_size="18sp",
-            size_hint=(0.18, 0.065),
-            pos_hint={"right": 0.98, "y": 0.02},
+        # Settings icon button — gear icon in a circular button, bottom-right
+        self._settings_btn = FloatLayout(
+            size_hint=(None, None),
+            size=(84, 84),
+            pos_hint={"right": 0.97, "y": 0.03},
+            opacity=0.55,
         )
+        # Circular button background: subtle fill + outline.
+        # Both use the same bounding box so they stay perfectly concentric.
+        with self._settings_btn.canvas.before:
+            self._settings_fill_c = Color(1, 1, 1, 0.10)
+            self._settings_fill = Ellipse(pos=self._settings_btn.pos,
+                                          size=self._settings_btn.size)
+            self._settings_ring_c = Color(1, 1, 1, 0.55)
+            self._settings_ring = Line(
+                ellipse=(*self._settings_btn.pos, *self._settings_btn.size),
+                width=1.6,
+            )
+        self._settings_btn.bind(pos=self._sync_settings_btn, size=self._sync_settings_btn)
+        gear_icon = UixImage(
+            source=os.path.join(_ASSETS, "icons", "settings.png"),
+            allow_stretch=True,
+            keep_ratio=True,
+            size_hint=(None, None),
+            size=(46, 46),
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
+        )
+        self._settings_btn.add_widget(gear_icon)
         self.add_widget(self._settings_btn)
+
+    def _sync_settings_btn(self, *_args) -> None:
+        """Keep the circular settings-button background aligned."""
+        b = self._settings_btn
+        self._settings_fill.pos = b.pos
+        self._settings_fill.size = b.size
+        self._settings_ring.ellipse = (*b.pos, *b.size)
 
     def _sync_btn_gfx(self, *_args) -> None:
         """Keep glow and button rects aligned with the container."""
@@ -1286,7 +1295,6 @@ class IdleScreen(BaseBoothScreen):
 
     def on_leave(self, *args) -> None:
         Animation.cancel_all(self._btn_container)
-        self._cancel_hold()
         # Cancel sleep timer
         if hasattr(self, '_sleep_event') and self._sleep_event:
             self._sleep_event.cancel()
@@ -1309,22 +1317,29 @@ class IdleScreen(BaseBoothScreen):
 
     def on_touch_down(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            # Let settings button handle its own touch first
-            if super().on_touch_down(touch):
-                return True
-            # Wake sleeping camera on any touch
-            if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
-                self._wake_camera()
+            if self._settings_btn.collide_point(*touch.pos):
+                self._settings_touch_uid = touch.uid
+                self._main_touch_uid = None
+                Animation.cancel_all(self._settings_btn, "opacity")
+                self._settings_btn.opacity = 0.25
+            else:
+                self._settings_touch_uid = None
+                self._main_touch_uid = touch.uid
+                if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
+                    self._wake_camera()
             return True
         return super().on_touch_down(touch)
 
     def on_touch_up(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            # Settings button handles its own touch_up — if it consumed, stop
-            if super().on_touch_up(touch):
+            if getattr(self, '_settings_touch_uid', None) == touch.uid:
+                self._settings_touch_uid = None
+                Animation(opacity=0.4, duration=0.15).start(self._settings_btn)
+                self._open_pincode()
                 return True
-            # Any other tap starts a session
-            self.navigate_to(SCREEN_LAYOUT)
+            if getattr(self, '_main_touch_uid', None) == touch.uid:
+                self._main_touch_uid = None
+                self.navigate_to(SCREEN_LAYOUT)
             return True
         return super().on_touch_up(touch)
 
@@ -3021,6 +3036,62 @@ class PrintScreen(BaseBoothScreen):
         ))
 
 
+class _PinBtn(Widget):
+    """Bordered square button for the PIN numpad. No fill, just a white outline."""
+
+    def __init__(self, text: str, callback, font_size: str = "40sp", **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._cb = callback
+        self._touch_uid = None
+
+        with self.canvas.before:
+            self._fill_c = Color(1, 1, 1, 0)
+            self._fill = RoundedRectangle(pos=self.pos, size=self.size, radius=[8])
+            self._line_c = Color(1, 1, 1, 0.45)
+            self._border = Line(rounded_rectangle=(*self.pos, *self.size, 8), width=1.5)
+        self.bind(pos=self._sync, size=self._sync)
+
+        self._lbl = Label(
+            text=text,
+            font_size=font_size,
+            bold=False,
+            color=(1, 1, 1, 0.9),
+            halign="center",
+            valign="middle",
+        )
+        self._lbl.bind(size=self._lbl.setter("text_size"))
+        self.bind(pos=self._sync_lbl, size=self._sync_lbl)
+        self.add_widget(self._lbl)
+
+    def _sync(self, *_) -> None:
+        self._fill.pos = self.pos
+        self._fill.size = self.size
+        self._border.rounded_rectangle = (*self.pos, *self.size, 8)
+
+    def _sync_lbl(self, *_) -> None:
+        self._lbl.pos = self.pos
+        self._lbl.size = self.size
+        self._lbl.text_size = self.size
+
+    def on_touch_down(self, touch) -> bool:
+        if self.collide_point(*touch.pos):
+            self._touch_uid = touch.uid
+            # Warm gold fill on press
+            self._fill_c.rgba = (0.76, 0.60, 0.35, 0.85)
+            self._lbl.color = (0, 0, 0, 0.9)
+            return True
+        return False
+
+    def on_touch_up(self, touch) -> bool:
+        if self._touch_uid is not None and self._touch_uid == touch.uid:
+            self._touch_uid = None
+            self._fill_c.rgba = (1, 1, 1, 0)
+            self._lbl.color = (1, 1, 1, 0.9)
+            self._cb()
+            return True
+        return False
+
+
 class PincodeScreen(BaseBoothScreen):
     """PIN entry screen that guards access to the settings screen.
 
@@ -3031,13 +3102,15 @@ class PincodeScreen(BaseBoothScreen):
 
     _PIN_LENGTH = 4
     _INACTIVITY_TIMEOUT = 30.0
+    _CELL = 90    # square cell size in px
+    _GAP  = 10    # gap between cells
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_PINCODE, **kwargs)
         from kivy.uix.gridlayout import GridLayout
-        from kivy.uix.boxlayout import BoxLayout
 
         self._entered: list[str] = []
+        self._dot_error = False
 
         # Opaque black background
         with self.canvas.before:
@@ -3045,87 +3118,69 @@ class PincodeScreen(BaseBoothScreen):
             self._bg_rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._sync_bg, size=self._sync_bg)
 
-        # Back button — ghost, top-left
-        self.add_widget(BoothButton(
-            text=self.t("pincode.back"),
-            theme=self.theme,
-            variant="ghost",
-            on_press=self._go_back,
-            font_size="18sp",
-            size_hint=(0.12, 0.065),
-            pos_hint={"x": 0.03, "top": 0.97},
-        ))
-
         # Title
         self.add_widget(Label(
             text=self.t("pincode.title"),
             font_size="36sp",
             bold=True,
             color=(1, 1, 1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.80},
+            pos_hint={"center_x": 0.5, "center_y": 0.86},
         ))
 
-        # Pin dot row — 4 circle characters in a BoxLayout
-        dots_row = BoxLayout(
-            orientation="horizontal",
-            spacing=24,
+        # Pin dots — canvas-drawn circles (no unicode dependency)
+        self._dots_widget = Widget(
             size_hint=(None, None),
-            size=(224, 56),
-            pos_hint={"center_x": 0.5, "center_y": 0.66},
+            size=(240, 56),
+            pos_hint={"center_x": 0.5, "center_y": 0.74},
         )
-        self._dot_labels: list[Label] = []
-        for _ in range(self._PIN_LENGTH):
-            lbl = Label(
-                text="○",
-                font_size="44sp",
-                color=(1, 1, 1, 0.35),
-                size_hint=(1, 1),
-            )
-            self._dot_labels.append(lbl)
-            dots_row.add_widget(lbl)
-        self.add_widget(dots_row)
+        self._dots_widget.bind(pos=self._update_dots, size=self._update_dots)
+        self.add_widget(self._dots_widget)
 
         # Error label
         self._error_label = Label(
             text="",
             font_size="22sp",
             color=(0.9, 0.25, 0.25, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.54},
+            pos_hint={"center_x": 0.5, "center_y": 0.63},
         )
         self.add_widget(self._error_label)
 
-        # Numpad — 3 cols × 4 rows
+        # Numpad — 3 cols × 4 rows, square cells, white border buttons
+        # Bottom row: Annuleer | 0 | <<
+        CELL, GAP = self._CELL, self._GAP
+        grid_w = 3 * CELL + 2 * GAP   # 290
+        grid_h = 4 * CELL + 3 * GAP   # 390
         grid = GridLayout(
-            cols=3, rows=4, spacing=16,
-            size_hint=(0.54, 0.50),
-            pos_hint={"center_x": 0.5, "center_y": 0.27},
+            cols=3, rows=4,
+            spacing=GAP,
+            size_hint=(None, None),
+            size=(grid_w, grid_h),
+            pos_hint={"center_x": 0.5, "y": 0.10},
         )
         self.add_widget(grid)
 
-        dark_text = self.theme.colors.background
-        numpad_keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", ""]
-        for key in numpad_keys:
-            if key == "":
-                grid.add_widget(Widget())
-            elif key == "⌫":
-                grid.add_widget(BoothButton(
-                    text=key,
-                    theme=self.theme,
-                    variant="primary",
-                    on_press=self._backspace,
-                    text_color=dark_text,
-                    size_hint=(1, 1),
-                ))
-            else:
-                k = key
-                grid.add_widget(BoothButton(
-                    text=k,
-                    theme=self.theme,
-                    variant="primary",
-                    on_press=lambda _k=k: self._digit(_k),
-                    text_color=dark_text,
-                    size_hint=(1, 1),
-                ))
+        cancel_text = self.t("common.back")
+        numpad = [
+            ("1", lambda: self._digit("1"), "44sp"),
+            ("2", lambda: self._digit("2"), "44sp"),
+            ("3", lambda: self._digit("3"), "44sp"),
+            ("4", lambda: self._digit("4"), "44sp"),
+            ("5", lambda: self._digit("5"), "44sp"),
+            ("6", lambda: self._digit("6"), "44sp"),
+            ("7", lambda: self._digit("7"), "44sp"),
+            ("8", lambda: self._digit("8"), "44sp"),
+            ("9", lambda: self._digit("9"), "44sp"),
+            (cancel_text, self._go_back, "20sp"),
+            ("0", lambda: self._digit("0"), "44sp"),
+            ("<<", self._backspace, "30sp"),
+        ]
+        for text, cb, fs in numpad:
+            grid.add_widget(_PinBtn(
+                text=text,
+                callback=cb,
+                font_size=fs,
+                size_hint=(1, 1),
+            ))
 
     # ---- layout sync --------------------------------------------------------
 
@@ -3135,19 +3190,28 @@ class PincodeScreen(BaseBoothScreen):
 
     # ---- dot display --------------------------------------------------------
 
-    def _update_dots(self) -> None:
-        for i, lbl in enumerate(self._dot_labels):
-            if i < len(self._entered):
-                lbl.text = "●"
-                lbl.color = (1, 1, 1, 1)
-            else:
-                lbl.text = "○"
-                lbl.color = (1, 1, 1, 0.35)
+    def _update_dots(self, *_args) -> None:
+        w = self._dots_widget
+        w.canvas.clear()
+        dot_r = 12
+        spacing = w.width / self._PIN_LENGTH
+        with w.canvas:
+            for i in range(self._PIN_LENGTH):
+                cx = w.x + spacing * i + spacing / 2
+                cy = w.center_y
+                if self._dot_error:
+                    Color(0.9, 0.25, 0.25, 1)
+                    Ellipse(pos=(cx - dot_r, cy - dot_r), size=(dot_r * 2, dot_r * 2))
+                elif i < len(self._entered):
+                    Color(1, 1, 1, 1)
+                    Ellipse(pos=(cx - dot_r, cy - dot_r), size=(dot_r * 2, dot_r * 2))
+                else:
+                    Color(1, 1, 1, 0.35)
+                    Line(circle=(cx, cy, dot_r), width=2)
 
     def _flash_error(self) -> None:
-        for lbl in self._dot_labels:
-            lbl.text = "●"
-            lbl.color = (0.9, 0.25, 0.25, 1)
+        self._dot_error = True
+        self._update_dots()
 
     # ---- lifecycle ----------------------------------------------------------
 
@@ -3197,6 +3261,8 @@ class PincodeScreen(BaseBoothScreen):
             Clock.schedule_once(self._clear_error, 0.9)
 
     def _clear_error(self, _dt) -> None:
+        self._dot_error = False
+        self._error_label.text = ""
         self._entered = []
         self._update_dots()
         self._error_label.text = ""
