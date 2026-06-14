@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { authFetch, getAccessToken, clearTokens, isLoggedIn } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
-import { Cpu, Thermometer, MemoryStick, HardDrive, Clock, RotateCw, Power, ChevronDown, RefreshCw, Server, Terminal, Check, X, CalendarDays, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Cpu, Thermometer, MemoryStick, HardDrive, Clock, RotateCw, Power, ChevronDown, RefreshCw, Server, Terminal, Check, X, CalendarDays, Loader2, CheckCircle2, AlertTriangle, Key, Trash2, Copy, ShieldAlert } from "lucide-react";
 
 interface BoothInfo {
   id: string;
@@ -42,6 +42,13 @@ interface EventOption {
   uid: string;
   name: string;
   is_active: boolean;
+}
+
+interface BoothEventState {
+  event_uid: string;
+  event_name: string;
+  display_date: string;
+  updated_at: string;
 }
 
 function formatUptime(seconds: number | null): string {
@@ -92,8 +99,12 @@ export default function BoothDetailPage({
   const [syncSteps, setSyncSteps] = useState<Array<{ step: string; label: string }>>([]);
   const [syncError, setSyncError] = useState("");
   const [syncEventName, setSyncEventName] = useState("");
+  const [boothEventState, setBoothEventState] = useState<BoothEventState | null>(null);
   const [error, setError] = useState("");
   const [boothId, setBoothId] = useState<string>("");
+  // API key (regeneration) — plaintext shown only once
+  const [apiKeyInfo, setApiKeyInfo] = useState<{ booth_id: string; api_key: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [logs, setLogs] = useState<Array<{level: string; message: string; logger: string; ts: string}>>([])
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const logWsRef = useRef<WebSocket | null>(null);
@@ -193,6 +204,35 @@ export default function BoothDetailPage({
     }
   }
 
+  async function handleRegenerateKey() {
+    if (!confirm(`Nieuwe API key genereren voor ${boothId}? De oude key wordt direct ongeldig.`))
+      return;
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}/regenerate-key`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Genereren mislukt");
+      const data = await res.json();
+      setCopied(false);
+      setApiKeyInfo({ booth_id: data.booth_id, api_key: data.api_key });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Genereren mislukt");
+    }
+  }
+
+  async function handleDeleteBooth() {
+    if (!confirm(`Booth "${booth?.name || boothId}" definitief verwijderen?`)) return;
+    try {
+      const res = await authFetch(`/api/api/booths/${boothId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Verwijderen mislukt");
+      router.push("/");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Verwijderen mislukt");
+    }
+  }
+
   async function fetchInitialLogs() {
     try {
       const res = await authFetch(`/api/api/booths/${boothId}/logs?limit=100`);
@@ -217,6 +257,13 @@ export default function BoothDetailPage({
           });
         } else if (msg.type === "sync_progress") {
           setSyncSteps(prev => [...prev, { step: msg.step || "", label: msg.label || "" }]);
+        } else if (msg.type === "event_state") {
+          setBoothEventState({
+            event_uid: msg.event_uid || "",
+            event_name: msg.event_name || "",
+            display_date: msg.display_date || "",
+            updated_at: msg.updated_at || "",
+          });
         }
       } catch {}
     };
@@ -279,22 +326,28 @@ export default function BoothDetailPage({
           <CalendarDays className="w-[18px] h-[18px] text-[var(--muted)]" />
           Event
         </h2>
-        <div className="relative max-w-md">
-          <select
-            value={booth.event_id || ""}
-            onChange={(e) => handleEventChange(e.target.value)}
-            className="w-full appearance-none bg-white border border-[var(--input-border)] rounded-lg pl-3 pr-9 py-2 text-sm text-[var(--foreground)] cursor-pointer focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15 transition"
-          >
-            <option value="">Geen event</option>
-            {events
-              .filter((ev) => ev.is_active || ev.id === booth.event_id)
-              .map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.name}
-                </option>
-              ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-light)]" />
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          {/* Select */}
+          <div className="relative w-full sm:max-w-xs">
+            <select
+              value={booth.event_id || ""}
+              onChange={(e) => handleEventChange(e.target.value)}
+              className="w-full appearance-none bg-white border border-[var(--input-border)] rounded-lg pl-3 pr-9 py-2 text-sm text-[var(--foreground)] cursor-pointer focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/15 transition"
+            >
+              <option value="">Geen event</option>
+              {events
+                .filter((ev) => ev.is_active || ev.id === booth.event_id)
+                .map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.name}
+                  </option>
+                ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted-light)]" />
+          </div>
+
+          {/* Booth live state */}
+          <BoothEventPanel state={boothEventState} isOnline={isOnline} />
         </div>
       </div>
 
@@ -329,6 +382,49 @@ export default function BoothDetailPage({
         </dl>
       </div>
 
+      {/* Beheer — API key & verwijderen */}
+      <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--foreground)] mb-4">
+          <ShieldAlert className="w-[18px] h-[18px] text-[var(--muted)]" />
+          Beheer
+        </h2>
+        <div className="flex flex-col gap-4">
+          {/* API key */}
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-[var(--foreground)]">API key</p>
+              <p className="text-xs text-[var(--muted)]">
+                Genereer een nieuwe key. De oude key wordt direct ongeldig — de booth.toml moet daarna bijgewerkt worden.
+              </p>
+            </div>
+            <button
+              onClick={handleRegenerateKey}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[var(--warning-light)] text-amber-700 border border-amber-200 hover:bg-amber-100 transition"
+            >
+              <Key className="w-4 h-4" />
+              Nieuwe API key
+            </button>
+          </div>
+
+          {/* Delete */}
+          <div className="flex items-start justify-between gap-4 flex-wrap pt-4 border-t border-[var(--card-border)]">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-[var(--foreground)]">Booth verwijderen</p>
+              <p className="text-xs text-[var(--muted)]">
+                Verwijdert deze booth permanent uit het beheer. Dit kan niet ongedaan worden gemaakt.
+              </p>
+            </div>
+            <button
+              onClick={handleDeleteBooth}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[var(--danger-light)] text-[var(--danger)] border border-red-200 hover:bg-red-100 transition"
+            >
+              <Trash2 className="w-4 h-4" />
+              Verwijderen
+            </button>
+          </div>
+        </div>
+      </div>
+
         {/* Log panel — full width */}
         <div className="bg-white border border-[var(--card-border)] rounded-2xl p-6">
           <div className="flex items-center justify-between mb-3">
@@ -354,6 +450,56 @@ export default function BoothDetailPage({
             <div ref={logEndRef} />
           </div>
         </div>
+
+        {/* API key display overlay — shown once after regeneration */}
+        {apiKeyInfo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+            <div className="bg-white border border-[var(--card-border)] rounded-xl w-full max-w-md p-6">
+              <h3 className="text-base font-semibold text-[var(--foreground)] mb-1">Nieuwe API key</h3>
+              <p className="text-sm text-[var(--muted)] mb-4">{apiKeyInfo.booth_id}</p>
+
+              <div className="bg-[var(--warning-light)] border border-amber-200 rounded-lg p-4 mb-4">
+                <p className="text-xs text-amber-700 mb-2 font-medium flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Deze key wordt maar één keer getoond!
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-sm text-[var(--foreground)] font-mono break-all bg-white p-2 rounded border border-amber-200">
+                    {apiKeyInfo.api_key}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(apiKeyInfo.api_key);
+                      setCopied(true);
+                    }}
+                    className="shrink-0 p-2 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-gray-100 rounded-lg transition"
+                    title="Kopieer"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3 border border-[var(--card-border)]">
+                <p className="text-xs text-[var(--muted)] mb-1">Configureer in booth.toml:</p>
+                <code className="text-xs text-[var(--foreground)] font-mono">
+                  [server]<br />
+                  booth_id = &quot;{apiKeyInfo.booth_id}&quot;<br />
+                  api_key = &quot;{apiKeyInfo.api_key}&quot;
+                </code>
+              </div>
+
+              <div className="flex justify-end mt-5">
+                <button
+                  onClick={() => setApiKeyInfo(null)}
+                  className="px-4 py-2 text-sm font-medium bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white rounded-lg transition"
+                >
+                  Begrepen, sluiten
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Event sync overlay */}
         {syncOpen && (
@@ -512,6 +658,54 @@ function RestartControl({ boothId, isOnline }: { boothId: string; isOnline: bool
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function BoothEventPanel({ state, isOnline }: { state: BoothEventState | null; isOnline: boolean }) {
+  if (!isOnline) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-[var(--card-border)] text-sm text-[var(--muted-light)]">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+        Booth offline
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-[var(--card-border)] text-sm text-[var(--muted-light)]">
+        <span className="w-3 h-3 border-2 border-[var(--muted-light)] border-t-transparent rounded-full animate-spin shrink-0" />
+        Wachten op booth…
+      </div>
+    );
+  }
+
+  const hasEvent = !!state.event_name;
+  return (
+    <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-lg bg-gray-50 border border-[var(--card-border)] min-w-0">
+      <span className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${hasEvent ? "bg-emerald-500" : "bg-gray-300"}`} />
+      <div className="min-w-0">
+        <p className="text-[11px] text-[var(--muted-light)] mb-0.5 leading-none">Op booth geconfigureerd</p>
+        {hasEvent ? (
+          <>
+            <p className="text-sm font-medium text-[var(--foreground)] truncate">{state.event_name}</p>
+            {state.display_date && (
+              <p className="text-xs text-[var(--muted)] truncate">{state.display_date}</p>
+            )}
+            {state.event_uid && (
+              <p className="text-[11px] text-[var(--muted-light)] font-mono truncate">ID: {state.event_uid}</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">Geen event</p>
+        )}
+        {state.updated_at && (
+          <p className="text-[10px] text-[var(--muted-light)] mt-1">
+            {new Date(state.updated_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

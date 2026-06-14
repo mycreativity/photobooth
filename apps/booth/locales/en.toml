@@ -139,3 +139,8 @@ camera_calibrated = "Exposure: ISO {iso}, f/{aperture}, {shutter} ✓"
 camera_calibrate_failed = "Calibration not optimal — adjust manually"
 camera_restart_needed = "Restart needed for camera switch"
 camera_not_found = "No DSLR found"
+
+[pincode]
+title = "Pincode"
+wrong = "Incorrect pincode"
+back = "Back"

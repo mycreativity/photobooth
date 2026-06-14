@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import threading
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,11 @@ if TYPE_CHECKING:
     from photobooth.ui.themes import ThemeData
 
 logger = logging.getLogger(__name__)
+
+# Absolute path to the booth's assets/ folder, works regardless of CWD.
+_ASSETS = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "assets")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +209,7 @@ SCREEN_REVIEW = "review"
 SCREEN_DELIVER = "deliver"
 SCREEN_PRINT = "print"
 SCREEN_SETTINGS = "settings"
+SCREEN_PINCODE = "pincode"
 
 SCREEN_FLOW = [
     SCREEN_SPLASH,
@@ -504,30 +511,8 @@ class BaseBoothScreen(Screen):
         self.preview_layer = preview_layer
         self.led = led
 
-        # Camera status indicator — small dot top-left
-        self._cam_dot = Widget(size_hint=(None, None), size=(12, 12),
-                               pos_hint={"x": 0.01, "top": 0.98})
-        with self._cam_dot.canvas:
-            self._cam_dot_color = Color(0.3, 0.3, 0.3, 0.8)
-            self._cam_dot_circle = Ellipse(
-                pos=self._cam_dot.pos, size=self._cam_dot.size)
-        self._cam_dot.bind(
-            pos=lambda w, p: setattr(self._cam_dot_circle, 'pos', p),
-            size=lambda w, s: setattr(self._cam_dot_circle, 'size', s))
-        self.add_widget(self._cam_dot)
-
     def _update_cam_dot(self, *_args) -> None:
-        """Set dot colour: green = camera connected, red = not."""
-        connected = False
-        if self.camera:
-            try:
-                connected = getattr(self.camera, '_camera', None) is not None
-            except Exception:
-                pass
-        if connected:
-            self._cam_dot_color.rgba = (0.2, 0.9, 0.2, 0.8)  # green
-        else:
-            self._cam_dot_color.rgba = (0.9, 0.2, 0.2, 0.8)  # red
+        pass  # Camera dot removed — status visible in admin panel
 
     def on_pre_enter(self, *args) -> None:
         self.opacity = 0
@@ -555,6 +540,31 @@ class BaseBoothScreen(Screen):
         )
         anim.bind(on_complete=lambda *_: setattr(manager, "current", target))
         anim.start(self)
+
+    # ------ inactivity timer helpers (opt-in for screens that need them) ----
+
+    def _start_inactivity_timer(self, timeout: float = 30.0) -> None:
+        self._cancel_inactivity_timer()
+        self._inactivity_timeout = timeout
+        self._inactivity_event = Clock.schedule_once(
+            self._on_inactivity_timeout, timeout
+        )
+
+    def _reset_inactivity_timer(self, *_args) -> None:
+        if getattr(self, "_inactivity_event", None):
+            self._cancel_inactivity_timer()
+            self._inactivity_event = Clock.schedule_once(
+                self._on_inactivity_timeout, self._inactivity_timeout
+            )
+
+    def _cancel_inactivity_timer(self) -> None:
+        ev = getattr(self, "_inactivity_event", None)
+        if ev:
+            ev.cancel()
+            self._inactivity_event = None
+
+    def _on_inactivity_timeout(self, _dt) -> None:
+        self.navigate_to(SCREEN_IDLE)
 
 
 # ---------------------------------------------------------------------------
@@ -1111,17 +1121,47 @@ class EventRequiredScreen(BaseBoothScreen):
         self.navigate_to(SCREEN_SETTINGS)
 
 
+def read_pushed_event() -> dict | None:
+    """Return the event pushed from the admin (cached in event_card.json).
+
+    Returns the parsed dict (event_uid, event_name, display_date, …) or
+    ``None`` when no event has been pushed / the cache is unreadable.
+    """
+    import json
+    from pathlib import Path
+
+    data_dir = Path("/opt/photobooth/data")
+    if not data_dir.exists():
+        data_dir = Path("data")
+    card_path = data_dir / "event_card.json"
+    if not card_path.exists():
+        return None
+    try:
+        card = json.loads(card_path.read_text())
+    except Exception:
+        return None
+    return card if card.get("event_name") else None
+
+
 class IdleScreen(BaseBoothScreen):
-    """Welcome screen — massive pulsing CTA, 5s long-press for settings.
+    """Welcome screen — massive pulsing CTA, settings button bottom-right.
 
     Designed for maximum visibility in dark environments: high-contrast
     colors and a bold, unmissable "START" button that pulses.
     """
 
-    _SETTINGS_HOLD_TIME = 5.0
-
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_IDLE, **kwargs)
+
+        # Coupled-event name (top of screen) — filled in on_enter.
+        self._event_label = Label(
+            text="",
+            font_size=self.theme.typography.subtitle_size,
+            bold=True,
+            color=self.theme.colors.primary_light,
+            pos_hint={"center_x": 0.5, "center_y": 0.9},
+        )
+        self.add_widget(self._event_label)
 
         # Title — bright white, large
         title = Label(
@@ -1173,7 +1213,42 @@ class IdleScreen(BaseBoothScreen):
         )
         self.add_widget(self._subtitle)
 
-        self._hold_event = None
+        # Settings icon button — gear icon in a circular button, bottom-right
+        self._settings_btn = FloatLayout(
+            size_hint=(None, None),
+            size=(84, 84),
+            pos_hint={"right": 0.97, "y": 0.03},
+            opacity=0.55,
+        )
+        # Circular button background: subtle fill + outline.
+        # Both use the same bounding box so they stay perfectly concentric.
+        with self._settings_btn.canvas.before:
+            self._settings_fill_c = Color(1, 1, 1, 0.10)
+            self._settings_fill = Ellipse(pos=self._settings_btn.pos,
+                                          size=self._settings_btn.size)
+            self._settings_ring_c = Color(1, 1, 1, 0.55)
+            self._settings_ring = Line(
+                ellipse=(*self._settings_btn.pos, *self._settings_btn.size),
+                width=1.6,
+            )
+        self._settings_btn.bind(pos=self._sync_settings_btn, size=self._sync_settings_btn)
+        gear_icon = UixImage(
+            source=os.path.join(_ASSETS, "icons", "settings.png"),
+            allow_stretch=True,
+            keep_ratio=True,
+            size_hint=(None, None),
+            size=(46, 46),
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
+        )
+        self._settings_btn.add_widget(gear_icon)
+        self.add_widget(self._settings_btn)
+
+    def _sync_settings_btn(self, *_args) -> None:
+        """Keep the circular settings-button background aligned."""
+        b = self._settings_btn
+        self._settings_fill.pos = b.pos
+        self._settings_fill.size = b.size
+        self._settings_ring.ellipse = (*b.pos, *b.size)
 
     def _sync_btn_gfx(self, *_args) -> None:
         """Keep glow and button rects aligned with the container."""
@@ -1189,6 +1264,9 @@ class IdleScreen(BaseBoothScreen):
 
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
+        # Show the coupled (admin-pushed) event, if any
+        event = read_pushed_event()
+        self._event_label.text = event["event_name"] if event else self.t("event.no_event")
         # Reset session state
         _session.reset()
         # Ensure camera preview is stopped and video resumes
@@ -1217,7 +1295,6 @@ class IdleScreen(BaseBoothScreen):
 
     def on_leave(self, *args) -> None:
         Animation.cancel_all(self._btn_container)
-        self._cancel_hold()
         # Cancel sleep timer
         if hasattr(self, '_sleep_event') and self._sleep_event:
             self._sleep_event.cancel()
@@ -1240,31 +1317,34 @@ class IdleScreen(BaseBoothScreen):
 
     def on_touch_down(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            self._hold_event = Clock.schedule_once(
-                self._open_settings, self._SETTINGS_HOLD_TIME
-            )
+            if self._settings_btn.collide_point(*touch.pos):
+                self._settings_touch_uid = touch.uid
+                self._main_touch_uid = None
+                Animation.cancel_all(self._settings_btn, "opacity")
+                self._settings_btn.opacity = 0.25
+            else:
+                self._settings_touch_uid = None
+                self._main_touch_uid = touch.uid
+                if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
+                    self._wake_camera()
             return True
         return super().on_touch_down(touch)
 
     def on_touch_up(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            if self._hold_event:
-                self._cancel_hold()
-                # Wake camera if it was sleeping
-                if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
-                    self._wake_camera()
-                self.navigate_to(SCREEN_LAYOUT)
+            if getattr(self, '_settings_touch_uid', None) == touch.uid:
+                self._settings_touch_uid = None
+                Animation(opacity=0.4, duration=0.15).start(self._settings_btn)
+                self._open_pincode()
                 return True
+            if getattr(self, '_main_touch_uid', None) == touch.uid:
+                self._main_touch_uid = None
+                self.navigate_to(SCREEN_LAYOUT)
+            return True
         return super().on_touch_up(touch)
 
-    def _open_settings(self, _dt) -> None:
-        self._hold_event = None
-        self.navigate_to(SCREEN_SETTINGS)
-
-    def _cancel_hold(self) -> None:
-        if self._hold_event:
-            self._hold_event.cancel()
-            self._hold_event = None
+    def _open_pincode(self) -> None:
+        self.navigate_to(SCREEN_PINCODE)
 
 
 class LayoutScreen(BaseBoothScreen):
@@ -2956,20 +3036,255 @@ class PrintScreen(BaseBoothScreen):
         ))
 
 
+class _PinBtn(Widget):
+    """Bordered square button for the PIN numpad. No fill, just a white outline."""
+
+    def __init__(self, text: str, callback, font_size: str = "40sp", **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._cb = callback
+        self._touch_uid = None
+
+        with self.canvas.before:
+            self._fill_c = Color(1, 1, 1, 0)
+            self._fill = RoundedRectangle(pos=self.pos, size=self.size, radius=[8])
+            self._line_c = Color(1, 1, 1, 0.45)
+            self._border = Line(rounded_rectangle=(*self.pos, *self.size, 8), width=1.5)
+        self.bind(pos=self._sync, size=self._sync)
+
+        self._lbl = Label(
+            text=text,
+            font_size=font_size,
+            bold=False,
+            color=(1, 1, 1, 0.9),
+            halign="center",
+            valign="middle",
+        )
+        self._lbl.bind(size=self._lbl.setter("text_size"))
+        self.bind(pos=self._sync_lbl, size=self._sync_lbl)
+        self.add_widget(self._lbl)
+
+    def _sync(self, *_) -> None:
+        self._fill.pos = self.pos
+        self._fill.size = self.size
+        self._border.rounded_rectangle = (*self.pos, *self.size, 8)
+
+    def _sync_lbl(self, *_) -> None:
+        self._lbl.pos = self.pos
+        self._lbl.size = self.size
+        self._lbl.text_size = self.size
+
+    def on_touch_down(self, touch) -> bool:
+        if self.collide_point(*touch.pos):
+            self._touch_uid = touch.uid
+            # Warm gold fill on press
+            self._fill_c.rgba = (0.76, 0.60, 0.35, 0.85)
+            self._lbl.color = (0, 0, 0, 0.9)
+            return True
+        return False
+
+    def on_touch_up(self, touch) -> bool:
+        if self._touch_uid is not None and self._touch_uid == touch.uid:
+            self._touch_uid = None
+            self._fill_c.rgba = (1, 1, 1, 0)
+            self._lbl.color = (1, 1, 1, 0.9)
+            self._cb()
+            return True
+        return False
+
+
+class PincodeScreen(BaseBoothScreen):
+    """PIN entry screen that guards access to the settings screen.
+
+    Shows a 3×4 numpad on a black background. Auto-confirms when 4 digits
+    are entered. Wrong PIN shows a brief error and clears. Times out to
+    the idle screen after 30 s of inactivity; each touch resets the timer.
+    """
+
+    _PIN_LENGTH = 4
+    _INACTIVITY_TIMEOUT = 30.0
+    _CELL = 90    # square cell size in px
+    _GAP  = 10    # gap between cells
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(name=SCREEN_PINCODE, **kwargs)
+        from kivy.uix.gridlayout import GridLayout
+
+        self._entered: list[str] = []
+        self._dot_error = False
+
+        # Opaque black background
+        with self.canvas.before:
+            Color(0, 0, 0, 1)
+            self._bg_rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._sync_bg, size=self._sync_bg)
+
+        # Title
+        self.add_widget(Label(
+            text=self.t("pincode.title"),
+            font_size="36sp",
+            bold=True,
+            color=(1, 1, 1, 1),
+            pos_hint={"center_x": 0.5, "center_y": 0.86},
+        ))
+
+        # Pin dots — canvas-drawn circles (no unicode dependency)
+        self._dots_widget = Widget(
+            size_hint=(None, None),
+            size=(240, 56),
+            pos_hint={"center_x": 0.5, "center_y": 0.74},
+        )
+        self._dots_widget.bind(pos=self._update_dots, size=self._update_dots)
+        self.add_widget(self._dots_widget)
+
+        # Error label
+        self._error_label = Label(
+            text="",
+            font_size="22sp",
+            color=(0.9, 0.25, 0.25, 1),
+            pos_hint={"center_x": 0.5, "center_y": 0.63},
+        )
+        self.add_widget(self._error_label)
+
+        # Numpad — 3 cols × 4 rows, square cells, white border buttons
+        # Bottom row: Annuleer | 0 | <<
+        CELL, GAP = self._CELL, self._GAP
+        grid_w = 3 * CELL + 2 * GAP   # 290
+        grid_h = 4 * CELL + 3 * GAP   # 390
+        grid = GridLayout(
+            cols=3, rows=4,
+            spacing=GAP,
+            size_hint=(None, None),
+            size=(grid_w, grid_h),
+            pos_hint={"center_x": 0.5, "y": 0.10},
+        )
+        self.add_widget(grid)
+
+        cancel_text = self.t("common.back")
+        numpad = [
+            ("1", lambda: self._digit("1"), "44sp"),
+            ("2", lambda: self._digit("2"), "44sp"),
+            ("3", lambda: self._digit("3"), "44sp"),
+            ("4", lambda: self._digit("4"), "44sp"),
+            ("5", lambda: self._digit("5"), "44sp"),
+            ("6", lambda: self._digit("6"), "44sp"),
+            ("7", lambda: self._digit("7"), "44sp"),
+            ("8", lambda: self._digit("8"), "44sp"),
+            ("9", lambda: self._digit("9"), "44sp"),
+            (cancel_text, self._go_back, "20sp"),
+            ("0", lambda: self._digit("0"), "44sp"),
+            ("<<", self._backspace, "30sp"),
+        ]
+        for text, cb, fs in numpad:
+            grid.add_widget(_PinBtn(
+                text=text,
+                callback=cb,
+                font_size=fs,
+                size_hint=(1, 1),
+            ))
+
+    # ---- layout sync --------------------------------------------------------
+
+    def _sync_bg(self, *_args) -> None:
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+
+    # ---- dot display --------------------------------------------------------
+
+    def _update_dots(self, *_args) -> None:
+        w = self._dots_widget
+        w.canvas.clear()
+        dot_r = 12
+        spacing = w.width / self._PIN_LENGTH
+        with w.canvas:
+            for i in range(self._PIN_LENGTH):
+                cx = w.x + spacing * i + spacing / 2
+                cy = w.center_y
+                if self._dot_error:
+                    Color(0.9, 0.25, 0.25, 1)
+                    Ellipse(pos=(cx - dot_r, cy - dot_r), size=(dot_r * 2, dot_r * 2))
+                elif i < len(self._entered):
+                    Color(1, 1, 1, 1)
+                    Ellipse(pos=(cx - dot_r, cy - dot_r), size=(dot_r * 2, dot_r * 2))
+                else:
+                    Color(1, 1, 1, 0.35)
+                    Line(circle=(cx, cy, dot_r), width=2)
+
+    def _flash_error(self) -> None:
+        self._dot_error = True
+        self._update_dots()
+
+    # ---- lifecycle ----------------------------------------------------------
+
+    def on_enter(self, *args) -> None:
+        super().on_enter(*args)
+        self._entered = []
+        self._error_label.text = ""
+        self._update_dots()
+        self._start_inactivity_timer(self._INACTIVITY_TIMEOUT)
+
+    def on_leave(self, *args) -> None:
+        self._cancel_inactivity_timer()
+
+    def on_touch_down(self, touch) -> bool:
+        self._reset_inactivity_timer()
+        return super().on_touch_down(touch)
+
+    # ---- input handling -----------------------------------------------------
+
+    def _digit(self, d: str) -> None:
+        if len(self._entered) >= self._PIN_LENGTH:
+            return
+        self._entered.append(d)
+        self._update_dots()
+        self._reset_inactivity_timer()
+        if len(self._entered) == self._PIN_LENGTH:
+            self._check_pin()
+
+    def _backspace(self) -> None:
+        if self._entered:
+            self._entered.pop()
+            self._update_dots()
+        self._error_label.text = ""
+        self._reset_inactivity_timer()
+
+    def _check_pin(self) -> None:
+        correct = "1234"
+        if self.config:
+            correct = self.config.app.settings_pin
+        if "".join(self._entered) == correct:
+            self._entered = []
+            self._update_dots()
+            self.navigate_to(SCREEN_SETTINGS)
+        else:
+            self._error_label.text = self.t("pincode.wrong")
+            self._flash_error()
+            Clock.schedule_once(self._clear_error, 0.9)
+
+    def _clear_error(self, _dt) -> None:
+        self._dot_error = False
+        self._error_label.text = ""
+        self._entered = []
+        self._update_dots()
+        self._error_label.text = ""
+
+    def _go_back(self) -> None:
+        self.navigate_to(SCREEN_IDLE)
+
+
 class SettingsScreen(BaseBoothScreen):
-    """Minimal settings screen — black background, invisible 2×3 grid.
+    """Minimal settings screen — black background, screen-filling 2×3 grid.
 
-    Accessed via a 5s long-press from the idle screen. Only two grid cells
-    are populated:
+    Accessed via a 5s long-press from the idle screen. Three of the six grid
+    blocks are populated (the gridlines themselves stay invisible):
 
-      1. An info card for the currently coupled (active) event.
-      2. A button to restart the app.
+      1. Back button.
+      2. Info card for the event pushed from the admin (read from the cached
+         ``event_card.json``).
+      3. Restart-app button.
 
-    The remaining four cells are intentionally empty, reserved for future
-    controls. Booth configuration (language, theme, camera, countdown,
-    glamour) is no longer edited here — those values are still loaded from
-    TOML + SQLite at startup, so the rest of the app keeps working exactly
-    as before.
+    The remaining blocks are intentionally empty, reserved for future use.
+    Booth configuration is no longer edited here — values are still loaded
+    from TOML + SQLite at startup, so the rest of the app keeps working.
     """
 
     # Centres for the 2×3 grid of square cells (no visible gridlines).
@@ -2978,6 +3293,7 @@ class SettingsScreen(BaseBoothScreen):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_SETTINGS, **kwargs)
+        from kivy.uix.gridlayout import GridLayout
 
         # Opaque black background — hides the live camera preview that the
         # other screens show behind the screen manager.
@@ -2986,37 +3302,44 @@ class SettingsScreen(BaseBoothScreen):
             self._bg_rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._sync_bg, size=self._sync_bg)
 
-        # Back button (top-left) — exit without restarting.
-        self.add_widget(BoothButton(
+        # 2×3 grid of large blocks (gridlines invisible), slightly inset.
+        grid = GridLayout(
+            cols=3, rows=2, spacing=24, padding=12,
+            size_hint=(0.9, 0.84),
+            pos_hint={"center_x": 0.5, "center_y": 0.5},
+        )
+        self.add_widget(grid)
+
+        # Dark text reads better than white on the opaque gold blocks
+        # (unlike the idle start button, which sits over the live preview).
+        dark_text = self.theme.colors.background
+
+        # Block 1 — Back
+        grid.add_widget(BoothButton(
             text=self.t("settings.back"),
             theme=self.theme,
-            variant="ghost",
+            variant="primary",
             on_press=self._go_back,
-            size_hint=(0.16, 0.08),
-            pos_hint={"x": 0.03, "top": 0.97},
+            size_hint=(1, 1),
+            text_color=dark_text,
         ))
 
-        # ── Invisible 2×3 grid of square cells ─────────────────────────
-        cells = [(cx, cy) for cy in self._ROWS for cx in self._COLS]
+        # Block 2 — pushed-event info card
+        grid.add_widget(self._build_event_cell())
 
-        # Cell 1 — coupled-event info card.
-        self._event_card = self._make_cell(*cells[0])
-        self._build_event_card(self._event_card)
-        self.add_widget(self._event_card)
-
-        # Cell 2 — restart-app button (fills the square cell).
-        restart_cell = self._make_cell(*cells[1])
-        restart_cell.add_widget(BoothButton(
-            text="↺  Herstart app",
+        # Block 3 — Restart
+        grid.add_widget(BoothButton(
+            text="Herstart app",
             theme=self.theme,
-            variant="secondary",
+            variant="primary",
             on_press=self._restart_app,
             size_hint=(1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.5},
+            text_color=dark_text,
         ))
-        self.add_widget(restart_cell)
 
-        # Cells 3–6 are intentionally empty (reserved for future controls).
+        # Blocks 4–6 — intentionally empty (reserved for future controls).
+        for _ in range(3):
+            grid.add_widget(Widget())
 
     # ---- layout helpers ---------------------------------------------------
 
@@ -3024,81 +3347,97 @@ class SettingsScreen(BaseBoothScreen):
         self._bg_rect.pos = self.pos
         self._bg_rect.size = self.size
 
-    def _make_cell(self, center_x: float, center_y: float) -> FloatLayout:
-        """A square grid cell (height tracks width), positioned by centre."""
-        cell = FloatLayout(
-            size_hint=(0.18, None),
-            pos_hint={"center_x": center_x, "center_y": center_y},
-        )
-        cell.bind(width=lambda inst, w: setattr(inst, "height", w))
-        return cell
+    def _build_event_cell(self) -> FloatLayout:
+        """Inverted event card: black fill with yellow border."""
+        cell = FloatLayout(size_hint=(1, 1))
 
-    def _build_event_card(self, cell: FloatLayout) -> None:
-        """Draw the surface background + labels for the event info card."""
+        accent = self.theme.colors.accent
+
         with cell.canvas.before:
-            Color(*self.theme.colors.surface)
-            self._card_rect = RoundedRectangle(
-                pos=cell.pos, size=cell.size, radius=[16],
-            )
+            # Glow (accent at low alpha, slightly larger)
+            Color(*accent[:3], 0.20)
+            self._card_glow = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[22])
+            # Border ring (accent fill)
+            Color(*accent[:3], 1.0)
+            self._card_border = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[16])
+            # Black fill inset by 3px
+            Color(0, 0, 0, 1)
+            self._card_rect = RoundedRectangle(pos=cell.pos, size=cell.size, radius=[14])
 
         def _sync(*_a):
-            self._card_rect.pos = cell.pos
-            self._card_rect.size = cell.size
+            inset = 3
+            self._card_glow.pos = (cell.x - 4, cell.y - 4)
+            self._card_glow.size = (cell.width + 8, cell.height + 8)
+            self._card_border.pos = cell.pos
+            self._card_border.size = cell.size
+            self._card_rect.pos = (cell.x + inset, cell.y + inset)
+            self._card_rect.size = (cell.width - inset * 2, cell.height - inset * 2)
         cell.bind(pos=_sync, size=_sync)
 
         cell.add_widget(Label(
             text=self.t("event.current"),
             font_size=self.theme.typography.body_size,
-            color=self.theme.colors.text_muted,
+            color=(*accent[:3], 0.75),
             halign="center", valign="middle",
-            size_hint=(0.86, 0.18),
-            pos_hint={"center_x": 0.5, "center_y": 0.82},
+            size_hint=(0.9, 0.16),
+            pos_hint={"center_x": 0.5, "center_y": 0.85},
         ))
 
         self._event_name_lbl = Label(
             text="",
             font_size=self.theme.typography.subtitle_size,
-            bold=True, color=self.theme.colors.primary_light,
+            bold=True, color=(1, 1, 1, 1),
             halign="center", valign="middle",
-            size_hint=(0.86, 0.34),
-            pos_hint={"center_x": 0.5, "center_y": 0.52},
+            size_hint=(0.9, 0.28),
+            pos_hint={"center_x": 0.5, "center_y": 0.60},
         )
         self._event_name_lbl.bind(size=self._event_name_lbl.setter("text_size"))
         cell.add_widget(self._event_name_lbl)
 
-        self._event_stats_lbl = Label(
+        self._event_meta_lbl = Label(
             text="",
-            font_size="15sp",
-            color=self.theme.colors.text_muted,
-            halign="center", valign="middle",
-            size_hint=(0.86, 0.18),
-            pos_hint={"center_x": 0.5, "center_y": 0.22},
+            font_size="16sp",
+            color=(1, 1, 1, 0.75),
+            halign="center", valign="top",
+            size_hint=(0.9, 0.38),
+            pos_hint={"center_x": 0.5, "center_y": 0.26},
         )
-        self._event_stats_lbl.bind(size=self._event_stats_lbl.setter("text_size"))
-        cell.add_widget(self._event_stats_lbl)
+        self._event_meta_lbl.bind(size=self._event_meta_lbl.setter("text_size"))
+        cell.add_widget(self._event_meta_lbl)
+
+        return cell
 
     # ---- lifecycle --------------------------------------------------------
+
+    _INACTIVITY_TIMEOUT = 30.0
 
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
         self._refresh_event_card()
+        self._start_inactivity_timer(self._INACTIVITY_TIMEOUT)
+
+    def on_leave(self, *args) -> None:
+        self._cancel_inactivity_timer()
+
+    def on_touch_down(self, touch) -> bool:
+        self._reset_inactivity_timer()
+        return super().on_touch_down(touch)
 
     def _refresh_event_card(self) -> None:
-        """Show the currently coupled (active) event, if any."""
-        name = None
-        stats = ""
-        if self.storage:
-            active = self.storage.get_active_event()
-            if active:
-                name = active["name"]
-                sessions = self.storage.get_event_session_count(active["id"])
-                photos = self.storage.get_event_photo_count(active["id"])
-                stats = self.t(
-                    "event.event_stats",
-                    sessions=str(sessions), photos=str(photos),
-                )
-        self._event_name_lbl.text = name or self.t("event.no_event")
-        self._event_stats_lbl.text = stats
+        """Show the event pushed from the admin (cached in event_card.json)."""
+        card = read_pushed_event()
+
+        if card and card.get("event_name"):
+            self._event_name_lbl.text = card.get("event_name", "")
+            meta = []
+            if card.get("display_date"):
+                meta.append(str(card["display_date"]))
+            if card.get("event_uid"):
+                meta.append("ID: " + str(card["event_uid"]))
+            self._event_meta_lbl.text = "\n".join(meta)
+        else:
+            self._event_name_lbl.text = self.t("event.no_event")
+            self._event_meta_lbl.text = ""
 
     # ---- actions ----------------------------------------------------------
 
@@ -3160,6 +3499,7 @@ SCREEN_REGISTRY: dict[str, type[BaseBoothScreen]] = {
     SCREEN_REVIEW: ReviewScreen,
     SCREEN_DELIVER: DeliverScreen,
     SCREEN_PRINT: PrintScreen,
+    SCREEN_PINCODE: PincodeScreen,
     SCREEN_SETTINGS: SettingsScreen,
 }
 
@@ -3208,7 +3548,7 @@ def build_screen_manager(
         led=led,
     )
 
-    all_screens = list(SCREEN_FLOW) + [SCREEN_SETTINGS]
+    all_screens = list(SCREEN_FLOW) + [SCREEN_PINCODE, SCREEN_SETTINGS]
     for name in all_screens:
         screen_cls = SCREEN_REGISTRY[name]
         sm.add_widget(screen_cls(**shared))

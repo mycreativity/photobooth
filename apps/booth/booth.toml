@@ -12,6 +12,7 @@ fps = 30
 language = "nl"             # "nl" (Nederlands) or "en" (English)
 theme = "classic"           # See src/photobooth/ui/themes.py for options
 background_video = "assets/videos/photobooth-bg-vid.mp4"
+settings_pin = "2030"       # PIN code to unlock the settings screen
 
 [camera]
 backend = "webcam"          # "webcam", "stub" (dev), or "gphoto2" (DSLR)

@@ -160,6 +160,8 @@ class BoothAgent:
                         self.server_event_id = ack_msg["event_id"]
                         self.server_event_uid = ack_msg.get("event_uid", "")
                         logger.info("Server event: id=%s uid=%s", self.server_event_id, self.server_event_uid)
+                    # Report our local event state so the admin knows what's on this booth
+                    await self._send_event_state(ws)
                 elif ack_msg.get("type") == "auth_error":
                     logger.error("Auth rejected: %s", ack_msg.get("reason"))
                     return
@@ -193,6 +195,8 @@ class BoothAgent:
                         self._handle_update_settings(msg.get("settings", {}))
                     elif msg_type == "push_event":
                         asyncio.create_task(self._handle_push_event(msg.get("event", {})))
+                    elif msg_type == "request_event_state":
+                        asyncio.create_task(self._send_event_state(ws))
                     elif msg_type == "restart":
                         self._handle_restart()
                     elif msg_type == "reboot":
@@ -432,12 +436,44 @@ class BoothAgent:
             await self.send_message({
                 "type": "event_synced", "event_uid": event_uid, "status": "ok",
             })
+            # Broadcast current event state so admin sees confirmation
+            await self.send_message({
+                "type": "event_state",
+                "event_uid": card_config["event_uid"],
+                "event_name": card_config["event_name"],
+                "display_date": card_config["display_date"],
+                "updated_at": card_config["updated_at"],
+            })
         except Exception as e:
             logger.error("Event sync failed: %s", e)
             await self.send_message({
                 "type": "event_synced", "event_uid": event_uid,
                 "status": "error", "error": str(e),
             })
+
+    async def _send_event_state(self, ws=None) -> None:
+        """Read event_card.json and send event_state to the server."""
+        try:
+            data_dir = Path("/opt/photobooth/data")
+            if not data_dir.exists():
+                data_dir = Path("data")
+            config_path = data_dir / "event_card.json"
+            card: dict = json.loads(config_path.read_text()) if config_path.exists() else {}
+        except Exception as e:
+            logger.warning("Could not read event_card.json: %s", e)
+            card = {}
+
+        msg = {
+            "type": "event_state",
+            "event_uid": card.get("event_uid", ""),
+            "event_name": card.get("event_name", ""),
+            "display_date": card.get("display_date", ""),
+            "updated_at": card.get("updated_at", ""),
+        }
+        if ws:
+            await ws.send(json.dumps(msg))
+        else:
+            await self.send_message(msg)
 
     async def _upload_photo(
         self,

@@ -31,6 +31,8 @@ class ConnectionHub:
         self._booth_logs: dict[str, deque] = {}
         # booth_id → pending event-sync future (resolved by booth's event_synced)
         self._sync_waiters: dict[str, asyncio.Future] = {}
+        # booth_id → latest event_card state reported by the booth
+        self._booth_event_state: dict[str, dict] = {}
 
     @property
     def connected_booths(self) -> list[str]:
@@ -126,6 +128,28 @@ class ConnectionHub:
         fut = self._sync_waiters.pop(booth_id, None)
         if fut and not fut.done():
             fut.cancel()
+
+    def set_event_state(self, booth_id: str, state: dict) -> None:
+        """Cache the event state last reported by a booth."""
+        self._booth_event_state[booth_id] = state
+
+    def get_event_state(self, booth_id: str) -> dict | None:
+        """Return the last known event state for a booth, or None."""
+        return self._booth_event_state.get(booth_id)
+
+    async def relay_to_admins(self, booth_id: str, msg: dict) -> None:
+        """Relay any message to all admin viewers watching this booth."""
+        viewers = self._admin_viewers.get(booth_id, set())
+        if not viewers:
+            return
+        dead = set()
+        for ws in viewers:
+            try:
+                await ws.send_json(msg)
+            except Exception:
+                dead.add(ws)
+        for ws in dead:
+            viewers.discard(ws)
 
     async def relay_sync_progress(self, booth_id: str, payload: dict) -> None:
         """Send an event-sync progress update to all admin viewers."""
