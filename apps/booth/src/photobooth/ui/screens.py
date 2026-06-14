@@ -3287,6 +3287,10 @@ class SettingsScreen(BaseBoothScreen):
     from TOML + SQLite at startup, so the rest of the app keeps working.
     """
 
+    # Centres for the 2×3 grid of square cells (no visible gridlines).
+    _COLS = (0.28, 0.50, 0.72)
+    _ROWS = (0.62, 0.30)
+
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_SETTINGS, **kwargs)
         from kivy.uix.gridlayout import GridLayout
