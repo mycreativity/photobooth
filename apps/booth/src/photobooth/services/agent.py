@@ -44,6 +44,8 @@ class BoothAgent:
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._start_time = time.monotonic()
+        # Previous /proc/stat per-core counters, for delta-based usage.
+        self._prev_cpu_cores: dict[int, tuple[int, int]] = {}
 
         # Server-assigned event info (received on registration)
         self.server_event_id: str = ""
@@ -608,6 +610,7 @@ class BoothAgent:
         """Collect full system metrics."""
         info = {
             "cpu": self._get_cpu_percent(),
+            "cpu_cores": self._get_cpu_cores(),
             "cam_connected": self._is_camera_connected(),
             "uptime": int(time.monotonic() - self._start_time),
             "mem_total_mb": 0,
@@ -818,6 +821,49 @@ class BoothAgent:
             return min(int((load_1min / cpu_count) * 100), 100)
         except (OSError, AttributeError):
             return 0
+
+    def _get_cpu_cores(self) -> list[int]:
+        """Per-core CPU utilisation (0-100) since the previous sample.
+
+        Parses the per-core ``cpuN`` lines of ``/proc/stat`` and computes
+        the busy fraction over the interval since the last call (typically
+        one heartbeat).  Returns an empty list when unavailable (non-Linux)
+        or on the first sample, when there is no previous snapshot to diff.
+        """
+        try:
+            with open("/proc/stat") as f:
+                lines = f.readlines()
+        except OSError:
+            return []
+
+        current: dict[int, tuple[int, int]] = {}
+        for line in lines:
+            if not line.startswith("cpu") or len(line) < 4 or not line[3].isdigit():
+                continue
+            parts = line.split()
+            idx = int(parts[0][3:])
+            vals = [int(x) for x in parts[1:]]
+            # idle + iowait count as "not busy"
+            idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
+            total = sum(vals)
+            current[idx] = (idle, total)
+
+        prev = self._prev_cpu_cores
+        self._prev_cpu_cores = current
+        if not prev:
+            return []
+
+        usage: list[int] = []
+        for idx in sorted(current):
+            if idx not in prev:
+                continue
+            idle_delta = current[idx][0] - prev[idx][0]
+            total_delta = current[idx][1] - prev[idx][1]
+            if total_delta <= 0:
+                usage.append(0)
+            else:
+                usage.append(max(0, min(100, round((1 - idle_delta / total_delta) * 100))))
+        return usage
 
     def _is_camera_connected(self) -> bool:
         """Check if a camera device is available."""

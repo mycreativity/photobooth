@@ -1,6 +1,6 @@
 # [STORY-007] Layout screen UX verbetering
 
-> **Status:** 🔨 In Progress
+> **Status:** ✅ Done
 > **Priority:** 🟠 High
 > **Component:** booth (Kivy UI)
 > **Estimate:** M
@@ -29,12 +29,12 @@ Elicitation-sessie op de live LayoutScreen (screenshot 2026-06-11) bracht vijf c
 
 ## Acceptance Criteria
 
-- [ ] AC1: De Fotogrid-optie is verwijderd uit `LayoutScreen`; alleen "Enkele foto" en "Collage (3)" worden getoond.
-- [ ] AC2: Elke layout-kaart toont als subtekst onder de naam het aantal foto-momenten via i18n, bijv. `layout.single_hint` = "1 foto" en `layout.strip_hint` = "3 foto's".
-- [ ] AC3: Elke layout-kaart toont een print-preview gegenereerd vanuit de slot-percentages in `card_layout.json`, inclusief een donkere branding-balk onderaan op de juiste verhouding.
-- [ ] AC4: Een statische subtekst of chip onderaan elke kaart toont "Daarna kies je een filter →" (altijd zichtbaar — filters zijn niet event-afhankelijk).
-- [ ] AC5: Een terugknop is altijd zichtbaar (linksonder), navigeert terug naar het idle/start-scherm en stopt de camera preview correct via `on_leave`.
-- [ ] AC6: `LAYOUT_GRID`, `_draw_grid_icon`, de grid-entry in `LAYOUT_PHOTO_COUNT` en de grid-slots in `print_layouts.py` zijn verwijderd; geen resterende referenties in screens, print service, agent of API.
+- [x] AC1: De Fotogrid-optie is verwijderd uit `LayoutScreen`; alleen "Enkele foto" en "Collage (3)" worden getoond.
+- [x] AC2: Elke layout-kaart toont als subtekst onder de naam het aantal foto-momenten via i18n, bijv. `layout.single_hint` = "1 foto" en `layout.strip_hint` = "3 foto's".
+- [x] AC3: Elke layout-kaart toont een print-preview gegenereerd vanuit de slot-percentages in `card_layout.json`, inclusief een donkere branding-balk onderaan op de juiste verhouding.
+- [x] AC4: Een statische subtekst of chip onderaan elke kaart toont "Daarna kies je een filter →" (altijd zichtbaar — filters zijn niet event-afhankelijk).
+- [x] AC5: Een terugknop is altijd zichtbaar (linksonder), navigeert terug naar het idle/start-scherm en stopt de camera preview correct via `on_leave`.
+- [x] AC6: `LAYOUT_GRID`, `_draw_grid_icon`, de grid-entry in `LAYOUT_PHOTO_COUNT` en de grid-slots in `print_layouts.py` zijn verwijderd; geen resterende referenties in screens, print service, agent of API.
 
 ---
 
@@ -76,3 +76,4 @@ Alle vragen beantwoord tijdens refinement (2026-06-11).
   - Fotogrid: nooit actief ingezet, geen migratie nodig.
   - Filter-hint: altijd zichtbaar — filters zijn niet event-afhankelijk, `FilterScreen._all_filters` is hardcoded.
   - Sessieduur-hint: subtekst onder kaartnaam via i18n.
+- 2026-06-14: ✅ Afgerond. LayoutScreen toont nu alleen Enkele foto + Collage(3) met print-preview vanuit `card_layout.json`-slots, sessieduur-hints, filter-hint en een terugknop linksonder. Bij afronden bleek AC6 nog niet volledig: grid-resten in `packages/shared/card_layout.json`, `packages/shared/constants.py` en een kapotte `LAYOUT_GRID`-referentie in `tests/test_screens.py`. Deze zijn opgeruimd (test groen, 23 collected). Status → ✅ Done.

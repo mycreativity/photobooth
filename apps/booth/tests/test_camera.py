@@ -1,6 +1,9 @@
 """Unit tests for the camera service."""
 
 import queue
+import threading
+import time
+
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
@@ -11,6 +14,46 @@ from photobooth.services.camera import (
     create_camera_service,
     list_webcams,
 )
+
+
+PREVIEW_THREAD_NAME = "webcam-preview"
+
+
+def _live_preview_threads() -> list[threading.Thread]:
+    """All currently-alive preview loop threads (across every instance)."""
+    return [
+        t for t in threading.enumerate()
+        if t.name == PREVIEW_THREAD_NAME and t.is_alive()
+    ]
+
+
+def _make_webcam_with_fake_capture() -> WebcamCameraService:
+    """A webcam service whose camera open is faked (no hardware needed).
+
+    The preview loop runs for real (real cv2.imencode on a tiny frame),
+    so the threading lifecycle is exercised exactly as in production.
+    """
+    import numpy as np
+
+    svc = WebcamCameraService(preview_fps=60)
+    mock_cap = MagicMock()
+    mock_cap.isOpened.return_value = True
+    mock_cap.read.return_value = (True, np.zeros((48, 64, 3), dtype=np.uint8))
+
+    def _fake_ensure():
+        svc._cap = mock_cap
+
+    svc._ensure_capture = _fake_ensure  # type: ignore[assignment]
+    return svc
+
+
+def _wait_until(predicate, timeout: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.02)
+    return predicate()
 
 
 class TestStubCameraService:
@@ -93,6 +136,90 @@ class TestWebcamCameraService:
         """Release should work even if camera was never opened."""
         svc = WebcamCameraService()
         svc.release()  # Should not raise
+
+
+class TestWebcamPreviewThreadLifecycle:
+    """Regression cover for the preview-thread leak.
+
+    Bug: every preview thread shared one ``_stop_event``. A fast
+    stop→start (e.g. navigating back to idle and starting again) could
+    revive the old thread instead of killing it, leaking busy-looping
+    threads that pegged the CPU and fought over the camera, making the
+    live preview go black.
+    """
+
+    def test_start_creates_exactly_one_thread(self):
+        svc = _make_webcam_with_fake_capture()
+        try:
+            svc.start_preview()
+            assert _wait_until(lambda: len(_live_preview_threads()) == 1)
+            assert svc.is_previewing
+        finally:
+            svc.stop_preview()
+
+    def test_stop_terminates_the_thread(self):
+        svc = _make_webcam_with_fake_capture()
+        svc.start_preview()
+        thread = svc._preview_thread
+        assert _wait_until(lambda: thread.is_alive())
+        svc.stop_preview()
+        assert not svc.is_previewing
+        assert not thread.is_alive()
+        assert _live_preview_threads() == []
+
+    def test_double_start_is_idempotent(self):
+        """Starting twice must not spawn a second preview thread."""
+        svc = _make_webcam_with_fake_capture()
+        try:
+            svc.start_preview()
+            assert _wait_until(lambda: len(_live_preview_threads()) == 1)
+            svc.start_preview()  # no-op
+            time.sleep(0.2)
+            assert len(_live_preview_threads()) == 1
+        finally:
+            svc.stop_preview()
+
+    def test_old_thread_is_not_revived_by_restart(self):
+        """The core race: after stop+start the OLD thread must stay dead."""
+        svc = _make_webcam_with_fake_capture()
+        try:
+            svc.start_preview()
+            first = svc._preview_thread
+            assert _wait_until(lambda: first.is_alive())
+
+            svc.stop_preview()
+            assert not first.is_alive()
+
+            svc.start_preview()
+            second = svc._preview_thread
+            assert second is not first
+            assert _wait_until(lambda: second.is_alive())
+            # Only the new thread is alive — the old one was not revived.
+            assert _live_preview_threads() == [second]
+        finally:
+            svc.stop_preview()
+
+    def test_repeated_cycles_do_not_leak_threads(self):
+        """Many stop/start cycles must never accumulate live threads."""
+        svc = _make_webcam_with_fake_capture()
+        try:
+            for _ in range(8):
+                svc.start_preview()
+                assert _wait_until(lambda: len(_live_preview_threads()) == 1)
+                svc.stop_preview()
+                assert _wait_until(lambda: len(_live_preview_threads()) == 0)
+            # Final state: nothing left running.
+            assert _live_preview_threads() == []
+        finally:
+            svc.stop_preview()
+
+    def test_release_stops_preview_thread(self):
+        svc = _make_webcam_with_fake_capture()
+        svc.start_preview()
+        assert _wait_until(lambda: len(_live_preview_threads()) == 1)
+        svc.release()
+        assert _wait_until(lambda: len(_live_preview_threads()) == 0)
+        assert not svc.is_ready  # release resets readiness so warm_up re-opens
 
 
 class TestCameraFactory:

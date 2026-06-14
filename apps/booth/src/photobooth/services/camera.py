@@ -131,9 +131,13 @@ class WebcamCameraService:
         self._cap = None  # cv2.VideoCapture — lazy init
         self._previewing = False
         self._preview_thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
+        # Each preview session gets its OWN stop event (created in
+        # start_preview).  Never shared or cleared-and-reused, so an old
+        # thread can never be accidentally revived by a new start_preview.
+        self._stop_event: threading.Event | None = None
         self._frame_queue: queue.Queue[bytes] = queue.Queue(maxsize=2)
-        self._lock = threading.Lock()
+        self._lock = threading.Lock()  # guards _cap access
+        self._preview_lock = threading.Lock()  # serialises start/stop
         self._ready = False
         self._preview_filter: str = "classic"  # Active filter for preview frames
 
@@ -199,31 +203,49 @@ class WebcamCameraService:
         Returns immediately — camera init happens in the background thread
         so the UI is never blocked.
         """
-        if self._previewing:
-            return
+        with self._preview_lock:
+            if self._previewing:
+                return
 
-        self._stop_event.clear()
-        self._previewing = True
+            # Make sure any previous thread is fully gone before starting a
+            # new one, so we never end up with two loops fighting over _cap.
+            old_thread = self._preview_thread
+            if old_thread and old_thread.is_alive():
+                if self._stop_event:
+                    self._stop_event.set()
+                old_thread.join(timeout=2.0)
 
-        self._preview_thread = threading.Thread(
-            target=self._preview_loop,
-            name="webcam-preview",
-            daemon=True,
-        )
-        self._preview_thread.start()
-        logger.info("Webcam preview starting (target %d fps)", self._preview_fps)
+            # Fresh stop event for this session — the old thread keeps its
+            # own (already-set) event, so it stays dead and is never revived.
+            stop_event = threading.Event()
+            self._stop_event = stop_event
+            self._previewing = True
+
+            self._preview_thread = threading.Thread(
+                target=self._preview_loop,
+                args=(stop_event,),
+                name="webcam-preview",
+                daemon=True,
+            )
+            self._preview_thread.start()
+            logger.info("Webcam preview starting (target %d fps)", self._preview_fps)
 
     def stop_preview(self) -> None:
         """Stop the background preview loop and wait for the thread."""
-        if not self._previewing:
-            return
+        with self._preview_lock:
+            if not self._previewing:
+                return
 
-        self._stop_event.set()
-        self._previewing = False
-
-        if self._preview_thread:
-            self._preview_thread.join(timeout=2.0)
+            self._previewing = False
+            if self._stop_event:
+                self._stop_event.set()
+            thread = self._preview_thread
             self._preview_thread = None
+
+        # Join outside the lock so a concurrent start_preview isn't blocked
+        # for the full timeout (the thread may be mid-read under _lock).
+        if thread:
+            thread.join(timeout=2.0)
 
         # Drain the queue
         while not self._frame_queue.empty():
@@ -288,7 +310,10 @@ class WebcamCameraService:
             if self._cap is not None:
                 self._cap.release()
                 self._cap = None
-                logger.info("Webcam device released")
+            # Reset readiness so warm_up() re-opens the device next time
+            # (e.g. waking from the idle power-saving sleep).
+            self._ready = False
+            logger.info("Webcam device released")
 
     @property
     def preview_filter(self) -> str:
@@ -316,8 +341,12 @@ class WebcamCameraService:
 
         return frame  # Unknown filter — passthrough
 
-    def _preview_loop(self) -> None:
-        """Background thread: open camera then continuously capture frames."""
+    def _preview_loop(self, stop_event: threading.Event) -> None:
+        """Background thread: open camera then continuously capture frames.
+
+        ``stop_event`` is unique to this thread, so a later ``start_preview``
+        can never revive it.
+        """
         import cv2
 
         # Open camera in this thread (may be slow — that's fine, we're off main thread)
@@ -330,7 +359,7 @@ class WebcamCameraService:
 
         interval = 1.0 / self._preview_fps
 
-        while not self._stop_event.is_set():
+        while not stop_event.is_set():
             start = time.monotonic()
 
             with self._lock:

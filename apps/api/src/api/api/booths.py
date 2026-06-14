@@ -161,6 +161,8 @@ async def get_booth_info(
         "version": booth.version,
         # Live system metrics
         "cpu_percent": live.get("cpu", booth.cpu_percent),
+        # Per-core usage (live only — not persisted; empty when offline)
+        "cpu_cores": live.get("cpu_cores", []),
         "camera_connected": live.get("cam_connected", booth.camera_connected),
         "uptime_seconds": live.get("uptime", booth.uptime_seconds),
         "mem_total_mb": live.get("mem_total_mb", 0),
