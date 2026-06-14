@@ -8,7 +8,7 @@ import {
   Button, Badge, Card, Modal, Toast, EmptyState, Spinner, Input,
 } from "@/app/components/ui";
 import {
-  Plus, Key, Trash2, Copy, Camera, Cpu, Clock, Eye, Check, X as XIcon, AlertTriangle,
+  Plus, Copy, Camera, Cpu, Clock, Eye, Check, X as XIcon, AlertTriangle,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -152,37 +152,6 @@ export default function DashboardPage() {
     }
   }
 
-  /* ---- Regenerate Key ---- */
-  async function handleRegenerateKey(boothId: string) {
-    if (!confirm(`Nieuwe API key genereren voor ${boothId}? De oude key wordt ongeldig.`))
-      return;
-    try {
-      const res = await authFetch(`/api/api/booths/${boothId}/regenerate-key`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to regenerate key");
-      const data = await res.json();
-      setApiKeyInfo({ booth_id: data.booth_id, api_key: data.api_key });
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error");
-    }
-  }
-
-  /* ---- Delete Booth ---- */
-  async function handleDeleteBooth(boothId: string) {
-    if (!confirm(`Booth "${boothId}" verwijderen?`)) return;
-    try {
-      const res = await authFetch(`/api/api/booths/${boothId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete booth");
-      showToast("Booth verwijderd");
-      await fetchData();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error");
-    }
-  }
-
   function getEventName(eventId: string | null): string {
     if (!eventId) return "";
     const ev = events.find((e) => e.id === eventId);
@@ -245,33 +214,11 @@ export default function DashboardPage() {
                   >
                     {booth.status === "online" ? "Online" : "Offline"}
                   </Badge>
-                  <div className="flex items-center gap-1">
-                    {booth.version && (
-                      <span className="text-xs text-[var(--muted-light)] bg-gray-100 px-2 py-0.5 rounded-full">
-                        v{booth.version}
-                      </span>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRegenerateKey(booth.booth_id);
-                      }}
-                      className="p-1 text-[var(--muted-light)] hover:text-[var(--warm)] rounded transition opacity-0 group-hover:opacity-100"
-                      title="Regenereer API key"
-                    >
-                      <Key className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteBooth(booth.booth_id);
-                      }}
-                      className="p-1 text-[var(--muted-light)] hover:text-[var(--danger)] rounded transition opacity-0 group-hover:opacity-100"
-                      title="Verwijder booth"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {booth.version && (
+                    <span className="text-xs text-[var(--muted-light)] bg-gray-100 px-2 py-0.5 rounded-full">
+                      v{booth.version}
+                    </span>
+                  )}
                 </div>
 
                 {/* Name */}
