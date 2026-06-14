@@ -1,6 +1,6 @@
 # [STORY-006] Admin Event Detail — Mobile UX Verbetering
 
-> **Status:** 🔨 In Progress
+> **Status:** ✅ Done
 > **Priority:** 🟠 High
 > **Component:** frontend
 > **Estimate:** M
@@ -50,18 +50,18 @@ De huidige event detail pagina (`/events/[uid]`) heeft meerdere mobile UX proble
 
 ## Acceptance Criteria
 
-- [ ] AC1: Fotokaart tab — achtergrond thumbnails zijn minimaal 48px met duidelijke selectie-indicator
-- [ ] AC2: Fotokaart tab — op mobile (< 640px) stackt de layout verticaal: preview boven, instellingen eronder
-- [ ] AC3: Fotokaart tab — fotokaart preview past volledig in viewport zonder horizontale scroll
-- [ ] AC4: QR & Delen tab — op mobile stackt QR + info verticaal: QR code boven, links/knoppen eronder
-- [ ] AC5: QR & Delen tab — alle tekst en knoppen zijn volledig zichtbaar zonder afkapping
-- [ ] AC6: Tabs — icon + kort label (⚙️ Info, 🎨 Kaart, 📱 QR) passen op één regel op 375px
-- [ ] AC7: Actieknoppen — sticky footer op mobile (Opslaan primair, Verwijderen in overflow menu), header-only op desktop
-- [ ] AC12: De 898-regel page.tsx is gesplitst in `GeneralTab.tsx`, `PhotoCardTab.tsx`, `SharingTab.tsx` + een dunne parent shell
-- [ ] AC8: Desktop layout blijft minimaal even goed als nu — geen regressie
-- [ ] AC9: Achtergrondkleur is consistent wit/lichtgrijs op alle tabs — geen teal bleed-through
-- [ ] AC10: Mobile header (hamburger + LOOMO logo) is zichtbaar op alle tabs, inclusief Fotokaart
-- [ ] AC11: Fotokaart preview placeholder gebruikt een neutrale kleur (grijs), niet teal
+- [x] AC1: Fotokaart tab — achtergrond thumbnails zijn minimaal 48px met duidelijke selectie-indicator
+- [x] AC2: Fotokaart tab — op mobile (< 640px) stackt de layout verticaal: preview boven, instellingen eronder
+- [x] AC3: Fotokaart tab — fotokaart preview past volledig in viewport zonder horizontale scroll
+- [x] AC4: QR & Delen tab — op mobile stackt QR + info verticaal: QR code boven, links/knoppen eronder
+- [x] AC5: QR & Delen tab — alle tekst en knoppen zijn volledig zichtbaar zonder afkapping
+- [x] AC6: Tabs — icon + kort label (⚙️ Info, 🎨 Kaart, 📱 QR) passen op één regel op 375px
+- [x] AC7: Actieknoppen — sticky footer op mobile (Opslaan primair, Verwijderen in overflow menu), header-only op desktop
+- [x] AC12: De 898-regel page.tsx is gesplitst in `GeneralTab.tsx`, `PhotoCardTab.tsx`, `SharingTab.tsx` + een dunne parent shell
+- [x] AC8: Desktop layout blijft minimaal even goed als nu — geen regressie
+- [x] AC9: Achtergrondkleur is consistent wit/lichtgrijs op alle tabs — geen teal bleed-through
+- [x] AC10: Mobile header (hamburger + LOOMO logo) is zichtbaar op alle tabs, inclusief Fotokaart
+- [x] AC11: Fotokaart preview placeholder gebruikt een neutrale kleur (grijs), niet teal
 
 ---
 
@@ -107,3 +107,4 @@ _Alle vragen beantwoord in refinement sessie._
   - Actieknoppen: sticky footer op mobile, header op desktop
   - Tabs: icon (Lucide) + kort label (Info, Kaart, QR)
   - Page splitsen: ja, drie tab-componenten + parent shell
+- 2026-06-14: ✅ Afgerond. `page.tsx` (898 r.) gesplitst in `page.tsx` (471 r.) + `GeneralTab.tsx`, `PhotoCardTab.tsx`, `SharingTab.tsx` + `_helpers.ts`/`_types.ts`. Alle 12 AC's geverifieerd PASS. Mergede via PR #5 naar main en daarna terug in deze branch. Status → ✅ Done.

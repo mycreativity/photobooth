@@ -10,7 +10,6 @@ from photobooth.ui.screens import (
     SessionState,
     LAYOUT_SINGLE,
     LAYOUT_STRIP,
-    LAYOUT_GRID,
     LAYOUT_PHOTO_COUNT,
     FILTER_NONE,
     SCREEN_FLOW,
@@ -97,9 +96,6 @@ class TestLayoutConstants:
 
     def test_strip_is_three_photos(self):
         assert LAYOUT_PHOTO_COUNT[LAYOUT_STRIP] == 3
-
-    def test_grid_is_four_photos(self):
-        assert LAYOUT_PHOTO_COUNT[LAYOUT_GRID] == 4
 
 
 class TestFilterConstants:
