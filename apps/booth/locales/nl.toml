@@ -139,3 +139,8 @@ camera_calibrated = "Belichting: ISO {iso}, f/{aperture}, {shutter} ✓"
 camera_calibrate_failed = "Kalibratie niet optimaal — handmatig aanpassen"
 camera_restart_needed = "Herstart nodig voor camera-wissel"
 camera_not_found = "Geen DSLR gevonden"
+
+[pincode]
+title = "Pincode"
+wrong = "Onjuiste pincode"
+back = "Terug"

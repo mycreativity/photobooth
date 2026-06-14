@@ -25,6 +25,7 @@ class AppConfig:
     language: str = "nl"
     theme: str = "classic"
     background_video: str = ""
+    settings_pin: str = "1234"        # PIN to access the settings screen
 
 
 @dataclass(frozen=True)

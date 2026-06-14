@@ -203,6 +203,7 @@ SCREEN_REVIEW = "review"
 SCREEN_DELIVER = "deliver"
 SCREEN_PRINT = "print"
 SCREEN_SETTINGS = "settings"
+SCREEN_PINCODE = "pincode"
 
 SCREEN_FLOW = [
     SCREEN_SPLASH,
@@ -555,6 +556,31 @@ class BaseBoothScreen(Screen):
         )
         anim.bind(on_complete=lambda *_: setattr(manager, "current", target))
         anim.start(self)
+
+    # ------ inactivity timer helpers (opt-in for screens that need them) ----
+
+    def _start_inactivity_timer(self, timeout: float = 30.0) -> None:
+        self._cancel_inactivity_timer()
+        self._inactivity_timeout = timeout
+        self._inactivity_event = Clock.schedule_once(
+            self._on_inactivity_timeout, timeout
+        )
+
+    def _reset_inactivity_timer(self, *_args) -> None:
+        if getattr(self, "_inactivity_event", None):
+            self._cancel_inactivity_timer()
+            self._inactivity_event = Clock.schedule_once(
+                self._on_inactivity_timeout, self._inactivity_timeout
+            )
+
+    def _cancel_inactivity_timer(self) -> None:
+        ev = getattr(self, "_inactivity_event", None)
+        if ev:
+            ev.cancel()
+            self._inactivity_event = None
+
+    def _on_inactivity_timeout(self, _dt) -> None:
+        self.navigate_to(SCREEN_IDLE)
 
 
 # ---------------------------------------------------------------------------
@@ -1134,13 +1160,11 @@ def read_pushed_event() -> dict | None:
 
 
 class IdleScreen(BaseBoothScreen):
-    """Welcome screen — massive pulsing CTA, 5s long-press for settings.
+    """Welcome screen — massive pulsing CTA, settings button bottom-right.
 
     Designed for maximum visibility in dark environments: high-contrast
     colors and a bold, unmissable "START" button that pulses.
     """
-
-    _SETTINGS_HOLD_TIME = 5.0
 
     def __init__(self, **kwargs) -> None:
         super().__init__(name=SCREEN_IDLE, **kwargs)
@@ -1205,7 +1229,17 @@ class IdleScreen(BaseBoothScreen):
         )
         self.add_widget(self._subtitle)
 
-        self._hold_event = None
+        # Small settings icon — bottom-right, subtle but visible
+        self._settings_btn = BoothButton(
+            text="Instellingen",
+            theme=self.theme,
+            variant="ghost",
+            on_press=self._open_pincode,
+            font_size="18sp",
+            size_hint=(0.18, 0.065),
+            pos_hint={"right": 0.98, "y": 0.02},
+        )
+        self.add_widget(self._settings_btn)
 
     def _sync_btn_gfx(self, *_args) -> None:
         """Keep glow and button rects aligned with the container."""
@@ -1275,31 +1309,27 @@ class IdleScreen(BaseBoothScreen):
 
     def on_touch_down(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            self._hold_event = Clock.schedule_once(
-                self._open_settings, self._SETTINGS_HOLD_TIME
-            )
+            # Let settings button handle its own touch first
+            if super().on_touch_down(touch):
+                return True
+            # Wake sleeping camera on any touch
+            if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
+                self._wake_camera()
             return True
         return super().on_touch_down(touch)
 
     def on_touch_up(self, touch) -> bool:
         if self.manager and self.manager.current == self.name:
-            if self._hold_event:
-                self._cancel_hold()
-                # Wake camera if it was sleeping
-                if hasattr(self, '_camera_sleeping') and self._camera_sleeping:
-                    self._wake_camera()
-                self.navigate_to(SCREEN_LAYOUT)
+            # Settings button handles its own touch_up — if it consumed, stop
+            if super().on_touch_up(touch):
                 return True
+            # Any other tap starts a session
+            self.navigate_to(SCREEN_LAYOUT)
+            return True
         return super().on_touch_up(touch)
 
-    def _open_settings(self, _dt) -> None:
-        self._hold_event = None
-        self.navigate_to(SCREEN_SETTINGS)
-
-    def _cancel_hold(self) -> None:
-        if self._hold_event:
-            self._hold_event.cancel()
-            self._hold_event = None
+    def _open_pincode(self) -> None:
+        self.navigate_to(SCREEN_PINCODE)
 
 
 class LayoutScreen(BaseBoothScreen):
@@ -2991,6 +3021,190 @@ class PrintScreen(BaseBoothScreen):
         ))
 
 
+class PincodeScreen(BaseBoothScreen):
+    """PIN entry screen that guards access to the settings screen.
+
+    Shows a 3×4 numpad on a black background. Auto-confirms when 4 digits
+    are entered. Wrong PIN shows a brief error and clears. Times out to
+    the idle screen after 30 s of inactivity; each touch resets the timer.
+    """
+
+    _PIN_LENGTH = 4
+    _INACTIVITY_TIMEOUT = 30.0
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(name=SCREEN_PINCODE, **kwargs)
+        from kivy.uix.gridlayout import GridLayout
+        from kivy.uix.boxlayout import BoxLayout
+
+        self._entered: list[str] = []
+
+        # Opaque black background
+        with self.canvas.before:
+            Color(0, 0, 0, 1)
+            self._bg_rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._sync_bg, size=self._sync_bg)
+
+        # Back button — ghost, top-left
+        self.add_widget(BoothButton(
+            text=self.t("pincode.back"),
+            theme=self.theme,
+            variant="ghost",
+            on_press=self._go_back,
+            font_size="18sp",
+            size_hint=(0.12, 0.065),
+            pos_hint={"x": 0.03, "top": 0.97},
+        ))
+
+        # Title
+        self.add_widget(Label(
+            text=self.t("pincode.title"),
+            font_size="36sp",
+            bold=True,
+            color=(1, 1, 1, 1),
+            pos_hint={"center_x": 0.5, "center_y": 0.80},
+        ))
+
+        # Pin dot row — 4 circle characters in a BoxLayout
+        dots_row = BoxLayout(
+            orientation="horizontal",
+            spacing=24,
+            size_hint=(None, None),
+            size=(224, 56),
+            pos_hint={"center_x": 0.5, "center_y": 0.66},
+        )
+        self._dot_labels: list[Label] = []
+        for _ in range(self._PIN_LENGTH):
+            lbl = Label(
+                text="○",
+                font_size="44sp",
+                color=(1, 1, 1, 0.35),
+                size_hint=(1, 1),
+            )
+            self._dot_labels.append(lbl)
+            dots_row.add_widget(lbl)
+        self.add_widget(dots_row)
+
+        # Error label
+        self._error_label = Label(
+            text="",
+            font_size="22sp",
+            color=(0.9, 0.25, 0.25, 1),
+            pos_hint={"center_x": 0.5, "center_y": 0.54},
+        )
+        self.add_widget(self._error_label)
+
+        # Numpad — 3 cols × 4 rows
+        grid = GridLayout(
+            cols=3, rows=4, spacing=16,
+            size_hint=(0.54, 0.50),
+            pos_hint={"center_x": 0.5, "center_y": 0.27},
+        )
+        self.add_widget(grid)
+
+        dark_text = self.theme.colors.background
+        numpad_keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", ""]
+        for key in numpad_keys:
+            if key == "":
+                grid.add_widget(Widget())
+            elif key == "⌫":
+                grid.add_widget(BoothButton(
+                    text=key,
+                    theme=self.theme,
+                    variant="primary",
+                    on_press=self._backspace,
+                    text_color=dark_text,
+                    size_hint=(1, 1),
+                ))
+            else:
+                k = key
+                grid.add_widget(BoothButton(
+                    text=k,
+                    theme=self.theme,
+                    variant="primary",
+                    on_press=lambda _k=k: self._digit(_k),
+                    text_color=dark_text,
+                    size_hint=(1, 1),
+                ))
+
+    # ---- layout sync --------------------------------------------------------
+
+    def _sync_bg(self, *_args) -> None:
+        self._bg_rect.pos = self.pos
+        self._bg_rect.size = self.size
+
+    # ---- dot display --------------------------------------------------------
+
+    def _update_dots(self) -> None:
+        for i, lbl in enumerate(self._dot_labels):
+            if i < len(self._entered):
+                lbl.text = "●"
+                lbl.color = (1, 1, 1, 1)
+            else:
+                lbl.text = "○"
+                lbl.color = (1, 1, 1, 0.35)
+
+    def _flash_error(self) -> None:
+        for lbl in self._dot_labels:
+            lbl.text = "●"
+            lbl.color = (0.9, 0.25, 0.25, 1)
+
+    # ---- lifecycle ----------------------------------------------------------
+
+    def on_enter(self, *args) -> None:
+        super().on_enter(*args)
+        self._entered = []
+        self._error_label.text = ""
+        self._update_dots()
+        self._start_inactivity_timer(self._INACTIVITY_TIMEOUT)
+
+    def on_leave(self, *args) -> None:
+        self._cancel_inactivity_timer()
+
+    def on_touch_down(self, touch) -> bool:
+        self._reset_inactivity_timer()
+        return super().on_touch_down(touch)
+
+    # ---- input handling -----------------------------------------------------
+
+    def _digit(self, d: str) -> None:
+        if len(self._entered) >= self._PIN_LENGTH:
+            return
+        self._entered.append(d)
+        self._update_dots()
+        self._reset_inactivity_timer()
+        if len(self._entered) == self._PIN_LENGTH:
+            self._check_pin()
+
+    def _backspace(self) -> None:
+        if self._entered:
+            self._entered.pop()
+            self._update_dots()
+        self._error_label.text = ""
+        self._reset_inactivity_timer()
+
+    def _check_pin(self) -> None:
+        correct = "1234"
+        if self.config:
+            correct = self.config.app.settings_pin
+        if "".join(self._entered) == correct:
+            self._entered = []
+            self._update_dots()
+            self.navigate_to(SCREEN_SETTINGS)
+        else:
+            self._error_label.text = self.t("pincode.wrong")
+            self._flash_error()
+            Clock.schedule_once(self._clear_error, 0.9)
+
+    def _clear_error(self, _dt) -> None:
+        self._entered = []
+        self._update_dots()
+        self._error_label.text = ""
+
+    def _go_back(self) -> None:
+        self.navigate_to(SCREEN_IDLE)
+
+
 class SettingsScreen(BaseBoothScreen):
     """Minimal settings screen — black background, screen-filling 2×3 grid.
 
@@ -3117,9 +3331,19 @@ class SettingsScreen(BaseBoothScreen):
 
     # ---- lifecycle --------------------------------------------------------
 
+    _INACTIVITY_TIMEOUT = 30.0
+
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
         self._refresh_event_card()
+        self._start_inactivity_timer(self._INACTIVITY_TIMEOUT)
+
+    def on_leave(self, *args) -> None:
+        self._cancel_inactivity_timer()
+
+    def on_touch_down(self, touch) -> bool:
+        self._reset_inactivity_timer()
+        return super().on_touch_down(touch)
 
     def _refresh_event_card(self) -> None:
         """Show the event pushed from the admin (cached in event_card.json)."""
@@ -3197,6 +3421,7 @@ SCREEN_REGISTRY: dict[str, type[BaseBoothScreen]] = {
     SCREEN_REVIEW: ReviewScreen,
     SCREEN_DELIVER: DeliverScreen,
     SCREEN_PRINT: PrintScreen,
+    SCREEN_PINCODE: PincodeScreen,
     SCREEN_SETTINGS: SettingsScreen,
 }
 
@@ -3245,7 +3470,7 @@ def build_screen_manager(
         led=led,
     )
 
-    all_screens = list(SCREEN_FLOW) + [SCREEN_SETTINGS]
+    all_screens = list(SCREEN_FLOW) + [SCREEN_PINCODE, SCREEN_SETTINGS]
     for name in all_screens:
         screen_cls = SCREEN_REGISTRY[name]
         sm.add_widget(screen_cls(**shared))
