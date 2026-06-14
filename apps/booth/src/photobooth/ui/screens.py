@@ -541,6 +541,62 @@ class BaseBoothScreen(Screen):
         anim.bind(on_complete=lambda *_: setattr(manager, "current", target))
         anim.start(self)
 
+    def _add_back_button(self, target: str) -> None:
+        """Add a bottom-left back button (triangle + label) → navigate to ``target``.
+
+        Shared between screens so the back affordance looks and behaves
+        identically everywhere (e.g. layout and filter screens).
+        """
+        color = (*self.theme.colors.text[:3], 0.55)
+
+        container = FloatLayout(
+            size_hint=(0.18, 0.08),
+            pos_hint={"x": 0.02, "center_y": 0.06},
+        )
+
+        def _on_touch(widget, touch) -> bool:
+            if widget.collide_point(*touch.pos):
+                self.navigate_to(target)
+                return True
+            return False
+
+        container.bind(on_touch_down=_on_touch)
+
+        icon = Widget(
+            size_hint=(0.22, 1.0),
+            pos_hint={"x": 0, "center_y": 0.5},
+        )
+
+        def _draw_triangle(w, *_):
+            w.canvas.clear()
+            cx = w.x + w.width / 2
+            cy = w.y + w.height / 2
+            th = w.height * 0.38
+            tw = th * 0.75
+            with w.canvas:
+                Color(*color)
+                Triangle(points=[
+                    cx + tw / 2, cy + th / 2,
+                    cx + tw / 2, cy - th / 2,
+                    cx - tw / 2, cy,
+                ])
+
+        icon.bind(pos=_draw_triangle, size=_draw_triangle)
+        container.add_widget(icon)
+
+        label = Label(
+            text=self.t("common.back"),
+            font_size="18sp",
+            color=color,
+            pos_hint={"right": 1.0, "center_y": 0.5},
+            size_hint=(0.78, 1.0),
+            halign="left",
+            valign="middle",
+        )
+        label.bind(size=lambda w, s: setattr(w, "text_size", s))
+        container.add_widget(label)
+        self.add_widget(container)
+
     # ------ inactivity timer helpers (opt-in for screens that need them) ----
 
     def _start_inactivity_timer(self, timeout: float = 30.0) -> None:
@@ -653,6 +709,7 @@ class TouchCard(FloatLayout):
         icon_text: str = "",
         icon_draw=None,
         subtitle_text: str = "",
+        label_font_size: str = "26sp",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -688,14 +745,18 @@ class TouchCard(FloatLayout):
             )
             self.add_widget(self._icon_label)
 
-        label_cy = 0.19 if subtitle_text else 0.12
+        # Cards with a subtitle (layout cards) keep a short single-line label.
+        # Cards without one (filter cards) get a taller box so longer names
+        # like "Vintage Love" wrap onto two lines instead of being clipped.
+        label_cy = 0.19 if subtitle_text else 0.15
+        label_h = 0.15 if subtitle_text else 0.28
         self._label = Label(
             text=label_text,
-            font_size="26sp",
+            font_size=label_font_size,
             bold=True,
             color=text_color,
             pos_hint={"center_x": 0.5, "center_y": label_cy},
-            size_hint=(0.9, 0.15),
+            size_hint=(0.92, label_h),
             text_size=(None, None),
             halign="center",
             valign="middle",
@@ -1407,53 +1468,8 @@ class LayoutScreen(BaseBoothScreen):
         filter_hint.bind(size=lambda w, s: setattr(w, "text_size", s))
         self.add_widget(filter_hint)
 
-        # Back button — always visible, bottom-left: triangle icon + label
-        back_container = FloatLayout(
-            size_hint=(0.18, 0.08),
-            pos_hint={"x": 0.02, "center_y": 0.06},
-        )
-        back_container.bind(on_touch_down=self._on_back_touch)
-
-        back_icon = Widget(
-            size_hint=(0.22, 1.0),
-            pos_hint={"x": 0, "center_y": 0.5},
-        )
-
-        def _draw_triangle(w, *_):
-            w.canvas.clear()
-            cx = w.x + w.width / 2
-            cy = w.y + w.height / 2
-            th = w.height * 0.38
-            tw = th * 0.75
-            with w.canvas:
-                Color(*filter_hint_color)
-                Triangle(points=[
-                    cx + tw / 2, cy + th / 2,
-                    cx + tw / 2, cy - th / 2,
-                    cx - tw / 2, cy,
-                ])
-
-        back_icon.bind(pos=_draw_triangle, size=_draw_triangle)
-        back_container.add_widget(back_icon)
-
-        back_label = Label(
-            text=self.t("common.back"),
-            font_size="18sp",
-            color=filter_hint_color,
-            pos_hint={"right": 1.0, "center_y": 0.5},
-            size_hint=(0.78, 1.0),
-            halign="left",
-            valign="middle",
-        )
-        back_label.bind(size=lambda w, s: setattr(w, "text_size", s))
-        back_container.add_widget(back_label)
-        self.add_widget(back_container)
-
-    def _on_back_touch(self, widget, touch) -> bool:
-        if widget.collide_point(*touch.pos):
-            self.navigate_to(SCREEN_IDLE)
-            return True
-        return False
+        # Back button — always visible, bottom-left (shared helper)
+        self._add_back_button(SCREEN_IDLE)
 
     def on_enter(self, *args) -> None:
         super().on_enter(*args)
@@ -1547,6 +1563,7 @@ class FilterScreen(BaseBoothScreen):
                 text_color=self.theme.colors.text,
                 callback=lambda fid=filter_id: self._preview_filter(fid),
                 icon_draw=draw_fn,
+                label_font_size="17sp",
                 size_hint=(None, 1),
                 width=card_w_dp,
             )
@@ -1567,14 +1584,6 @@ class FilterScreen(BaseBoothScreen):
             self._cards_box.children[-1].bind(width=_update_box_width)
         self.add_widget(scroll)
 
-        self._swipe_hint = Label(
-            text="← " + self.t("filter.title") + " →",
-            font_size="16sp",
-            color=(*self.theme.colors.text_muted[:3], 0.5),
-            pos_hint={"center_x": 0.5, "y": 0.10},
-        )
-        self.add_widget(self._swipe_hint)
-
         logger.info("[Filters] %d filters available", len(self._all_filters))
 
         # Confirm button at bottom-center
@@ -1587,6 +1596,9 @@ class FilterScreen(BaseBoothScreen):
             pos_hint={"center_x": 0.5, "y": 0.02},
         )
         self.add_widget(self._done_btn)
+
+        # Back button — return to the layout screen (shared helper)
+        self._add_back_button(SCREEN_LAYOUT)
 
     def _preview_filter(self, filter_id: str) -> None:
         """Apply filter to live preview without navigating."""

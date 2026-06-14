@@ -11,10 +11,19 @@ from pathlib import Path
 
 from photobooth.config import load_config
 from photobooth.app import PhotoboothApp
+from photobooth.single_instance import AlreadyRunningError, acquire_single_instance_lock
 
 
 def main() -> None:
     """Bootstrap the application: load config, then launch the Kivy app."""
+    # Refuse to start if another instance is already running — two booths
+    # fighting over the camera causes a black/missing preview and double CPU.
+    try:
+        _lock_fd = acquire_single_instance_lock()  # noqa: F841 — held for process lifetime
+    except AlreadyRunningError as exc:
+        print(f"Photobooth is already running — exiting. ({exc})")
+        sys.exit(1)
+
     config_path = Path("booth.toml")
     if not config_path.exists():
         print(f"Warning: config file '{config_path}' not found, using defaults.")

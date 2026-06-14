@@ -63,7 +63,21 @@
       register: pip_result
       changed_when: "'Successfully installed' in pip_result.stdout"
 
-    - name: Restart photobooth service
+    # The kiosk runs via the X11 autologin session (.xinitrc), NOT systemd.
+    # Make sure the systemd unit can never start a second, competing instance.
+    - name: Ensure systemd photobooth service is stopped and disabled
       ansible.builtin.systemd:
         name: photobooth
-        state: restarted
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    # Restart the kiosk by killing the running app — the getty autologin
+    # session re-runs .xinitrc and relaunches it with the new code.
+    # rc 0 = killed, rc 1 = nothing was running (both fine).
+    - name: Restart kiosk app (xinit relaunches it)
+      ansible.builtin.command:
+        cmd: pkill -f 'bin/python -m photobooth'
+      register: kiosk_kill
+      changed_when: kiosk_kill.rc == 0
+      failed_when: kiosk_kill.rc not in [0, 1]
