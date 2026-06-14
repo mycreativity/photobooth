@@ -34,9 +34,21 @@ async def admin_websocket(websocket: WebSocket, booth_id: str):
     await websocket.accept()
     hub.register_admin_viewer(booth_id, websocket)
 
+    # Send cached event state immediately so the UI has data before the booth
+    # sends its next update.
+    cached_event_state = hub.get_event_state(booth_id)
+    if cached_event_state:
+        await websocket.send_json({
+            "type": "event_state",
+            "booth_id": booth_id,
+            **cached_event_state,
+        })
+
     # If no admin was watching before, tell the booth to start preview
     if hub.get_viewer_count(booth_id) == 1:
         await hub.send_to_booth(booth_id, {"type": "start_preview"})
+        # Also request fresh event state
+        await hub.send_to_booth(booth_id, {"type": "request_event_state"})
 
     try:
         while True:

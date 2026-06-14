@@ -209,6 +209,22 @@ async def booth_websocket(websocket: WebSocket, booth_id: str):
                     "error": msg.get("error"),
                 })
 
+            elif msg_type == "event_state":
+                if not authenticated:
+                    continue
+                state = {
+                    "event_uid": msg.get("event_uid", ""),
+                    "event_name": msg.get("event_name", ""),
+                    "display_date": msg.get("display_date", ""),
+                    "updated_at": msg.get("updated_at", ""),
+                }
+                hub.set_event_state(booth_id, state)
+                await hub.relay_to_admins(booth_id, {
+                    "type": "event_state",
+                    "booth_id": booth_id,
+                    **state,
+                })
+
             else:
                 logger.debug("Unknown message type from %s: %s", booth_id, msg_type)
 
