@@ -43,13 +43,24 @@
         src: "{{ repo_root }}/packages/shared/"
         dest: "{{ app_dir }}/shared/"
         delete: true
+        rsync_opts:
+          - "--exclude=__pycache__"
       become: false
 
+    - name: Fix file ownership
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        owner: "{{ booth_user }}"
+        group: "{{ booth_group }}"
+        recurse: true
+
     - name: Reinstall package (pick up new deps)
-      ansible.builtin.pip:
-        name: "-e {{ app_dir }}"
-        virtualenv: "{{ venv_dir }}"
+      ansible.builtin.command:
+        cmd: "{{ venv_dir }}/bin/pip install -e {{ app_dir }}"
+      become: true
       become_user: "{{ booth_user }}"
+      register: pip_result
+      changed_when: "'Successfully installed' in pip_result.stdout"
 
     - name: Restart photobooth service
       ansible.builtin.systemd:
